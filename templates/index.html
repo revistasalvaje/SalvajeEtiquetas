@@ -1,158 +1,89 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="es">
 <head>
-	<title>Python Flask ReplAuth</title>
-<script src="https://replit.com/public/js/repl-auth-v2.js"></script>
+    <meta charset="UTF-8">
+    <title>Generador de etiquetas postales</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style></style>
 </head>
 <body>
-	{% if user_id %}
-	<center>
-  <div class="box">
-    <center>
-    <div class="box-text-auth">
-      <p>
-        Hello, {{ user_name }}! ({{ user_id }})
-      </p>
+    <div class="container">
+        <h1>Salvajetiquetas</h1>
+
+        <form method="POST">
+            <label for="sheet_url">Google Sheets:</label>
+            <input type="text" name="sheet_url" id="sheet_url" required>
+            <button type="submit">Cargar hoja</button>
+        </form>
+
+        {% if error %}<p class="error">{{ error }}</p>{% endif %}
+        {% if success %}<p class="success">{{ success }}</p>{% endif %}
+
+        {% if preview %}
+        <h2>Editar datos antes de generar etiquetas</h2>
+        <form id="editar-form">
+            <table class="editable">
+                <thead>
+                    <tr>
+                        {% for col in preview[0].keys() %}<th>{{ col }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in preview %}
+                    <tr>
+                        {% for key, val in row.items() %}
+                        <td>
+                            {% if key in ["Internacional", "Enviar"] %}
+                                <input type="checkbox" name="{{ key }}" {% if val in [True, 'True', 'true', '1'] %}checked{% endif %}>
+                            {% elif key == "Producto" %}
+                                <input type="text" name="{{ key }}" value="{{ val|replace('.0', '') }}">
+                            {% else %}
+                                <input type="text" name="{{ key }}" value="{{ val }}">
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="submit">Guardar y regenerar PDF</button>
+            <button onclick="window.open('/etiquetas_or.pdf', '_blank')">Generar etiquetas OR</button>
+        </form>
+
+        <script>
+        document.getElementById("editar-form").addEventListener("submit", function(e) {
+            e.preventDefault();
+            const rows = Array.from(document.querySelectorAll("tbody tr"));
+            const headers = Array.from(document.querySelectorAll("thead th")).map(th => th.textContent);
+            const data = rows.map(row => {
+                const cells = row.querySelectorAll("td input");
+                return Object.fromEntries(headers.map((h, i) => {
+                    const input = cells[i];
+                    if (input.type === "checkbox") return [h, input.checked];
+                    return [h, input.value.trim()];
+                }));
+            });
+
+            fetch("/editar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ data: data })
+            }).then(res => {
+                if (res.ok) {
+                    const iframe = document.querySelector("iframe");
+                    if (iframe) {
+                        iframe.src = "/etiquetas.pdf?" + new Date().getTime();
+                    }
+                }
+            });
+        });
+        </script>
+        {% endif %}
+
+        {% if success %}
+        <h2>Previsualización de etiquetas</h2>
+        <iframe src="{{ url_for('generar_pdf') }}" width="100%" height="600px" style="border:1px solid #ccc;"></iframe>
+        {% endif %}
     </div>
-  <img src="{{ user_profile_image }}" width="200">
-    <center>
-  </center>
-  </div>
-	{% else %}
-  <center>
-    <center>
-      <div class="box">
-        <div class="box-text">
-            <h1>Hello!</h1>
-        </div>
-        <div class="box-button">
-          <button onclick="LoginWithReplit()"> Login w/ replit</button>
-        </div>
-    </center>
-      </div>
-  </center>
-
-	{% endif %}
 </body>
-<style>
-  html, body {
-  height: 100%;
-  width: 100%;
-  background-color:#121212;
-}
-
-@font-face {
-  font-family: "Font";
-  src: url("https://css.replit.cool/Chess/src/fonts/Poppins-Bold[1].ttf");
-}
-
-h1{
-  font-family:"Font";
-  font-size:75px;
-  color:#00bbf9;
-}
-
-p{
-  font-family:"Font";
-  font-size:22px;
-  color:#00bbf9;
-}
-
-a{
-  font-family:"Font";
-  color:white;
-  font-size:22px;
-  text-decoration:none;
-  cursor:help;
-  text-shadow:2px 2px #00bbf9;
-}
-
-address{
-  font-family:"Font";
-  font-size:18px;
-  text-shadow:2px 2px #00bbf9;
-}
-
-summary{
-  font-family:"Font";
-  font-size:20px;
-  text-shadow:2px 2px #c400fa;
-  transition:0.7s;
-}
-
-details{
-  font-family:"Font";
-  font-size:20px;
-  text-shadow:2px 2px #c400fa;
-}
-
-::placeholder{
-  font-family:"Font";
-  font-size:25px;
-  color:#787878;
-}
-
-button{
-  width:200px;
-  height:55px;
-  font-family:"Trebuchet MS";
-  font-size:25px;
-  box-shadow:4px 4px white;
-  border-color:#00fa79;
-  color:white;
-  background-color:#00fa79;
-  border-radius:5px;
-}
-
-button:hover{
-  font-family:"Trebuchet MS";
-  font-size:25px;
-  background-color:white;
-  box-shadow:4px 4px #00fa79;
-  color:#00fa79;
-  border-radius:5px;
-  border-color:white;
-  transition:0.7s;
-}
-
-button:disabled{
-  font-family:"Trebuchet MS";
-  font-size:25px;
-  background-color:white;
-  box-shadow:4px 4px #00fa79;
-  border-radius:5px;
-  border-color:#121212;
-  cursor:not-allowed;
-  color:white;
-}
-
-.box-position{
-  position:relative;
-}
-  
-.box{
-  width:300px;
-  height:300px;
-  background-color:#495057;
-  border-radius:5px;
-  border-color:white;
-  position:relative;
-  top:150px;
-}
-
-.box-text{
-  position:relative;
-  top:60px;
-}
-
-.box-button{
-  position:relative;
-  top:20px;
-}
-
-.box-text-auth{
-  position:relative;
-  top:10px;
-}
-</style>
 </html>

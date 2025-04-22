@@ -1,0 +1,114 @@
+body {
+  font-family: system-ui, sans-serif;
+  background-color: #ffffff;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  background: white;
+  padding: 2rem 3rem;
+  max-width: none;
+  width: 100%;
+  margin: 0 auto;
+}
+
+h1 {
+  margin-top: 0;
+}
+
+input[type="text"] {
+  padding: 0.4rem;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  margin-top: 1rem;
+  background: #007BFF;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0056b3;
+}
+
+.error {
+  color: red;
+  margin-top: 1rem;
+}
+
+.success {
+  color: green;
+  margin-top: 1rem;
+}
+
+/* ======= Tabla editable ======= */
+
+.editable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.95rem;
+  table-layout: auto;
+}
+
+.editable th,
+.editable td {
+  border: 1px solid #ddd;
+  padding: 0.4rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.editable th {
+  background-color: #f0f0f0;
+}
+
+.editable td input[type="text"] {
+  width: 100%;
+  min-width: 5ch;
+  font-family: inherit;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+/* Anchos proporcionales por tipo de campo */
+.editable td input[type="text"][name="Dirección"] {
+  min-width: 34ch;
+}
+
+.editable td input[type="text"][name="Nombre"] {
+  min-width: 22ch;
+}
+
+.editable td input[type="text"][name="Empresa"] {
+  min-width: 20ch;
+}
+
+.editable td input[type="text"][name="Ciudad"] {
+  min-width: 14ch;
+}
+
+.editable td input[type="text"][name="CP"],
+.editable td input[type="text"][name="Zona"],
+.editable td input[type="text"][name="Producto"],
+.editable td input[type="text"][name="País"] {
+  min-width: 6ch;
+}
+
+/* Centrado para checkboxes */
+.editable td input[type="checkbox"] {
+  display: block;
+  margin: auto;
+}
