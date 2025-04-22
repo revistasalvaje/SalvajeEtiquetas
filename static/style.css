@@ -1,26 +1,98 @@
+/* Enhanced style.css with responsiveness and improved UI */
+
+:root {
+  --primary-color: #007BFF;
+  --primary-dark: #0056b3;
+  --success-color: #28a745;
+  --error-color: #dc3545;
+  --light-gray: #f0f0f0;
+  --border-color: #ddd;
+  --text-color: #333;
+}
+
 body {
-  font-family: system-ui, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color: var(--text-color);
   background-color: #ffffff;
   margin: 0;
   padding: 0;
+  line-height: 1.5;
 }
 
 .container {
   background: white;
-  padding: 2rem 3rem;
-  max-width: none;
+  padding: 2rem;
+  max-width: 1200px;
   width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
+}
+
+header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
 }
 
 h1 {
   margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: var(--primary-color);
+}
+
+h2 {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--light-gray);
+  padding-bottom: 0.5rem;
+}
+
+.subtitle {
+  color: #666;
+  margin-top: 0;
+}
+
+/* Form styles */
+.form-section {
+  margin-bottom: 2rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.form-help {
+  display: block;
+  font-size: 0.875rem;
+  color: #666;
+  margin-top: 0.25rem;
+}
+
+.input-group {
+  display: flex;
+  gap: 0.5rem;
 }
 
 input[type="text"] {
-  padding: 0.4rem;
-  font-size: 0.95rem;
-  box-sizing: border-box;
+  display: block;
+  padding: 0.6rem;
+  font-size: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
 
 input[type="checkbox"] {
@@ -28,52 +100,154 @@ input[type="checkbox"] {
   height: 1.2rem;
 }
 
-button {
-  padding: 0.5rem 1rem;
+/* Buttons */
+button, .button {
+  display: inline-block;
+  padding: 0.6rem 1.2rem;
   font-size: 1rem;
-  margin-top: 1rem;
-  background: #007BFF;
-  color: white;
+  font-weight: 500;
+  text-align: center;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  text-decoration: none;
 }
 
-button:hover {
-  background: #0056b3;
+button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
-.error {
-  color: red;
-  margin-top: 1rem;
+button.primary, .button.primary {
+  background: var(--primary-color);
+  color: white;
 }
 
-.success {
-  color: green;
-  margin-top: 1rem;
+button.primary:hover:not(:disabled), .button.primary:hover {
+  background: var(--primary-dark);
 }
 
-/* ======= Tabla editable ======= */
+button.secondary, .button.secondary {
+  background: #6c757d;
+  color: white;
+}
+
+button.secondary:hover:not(:disabled), .button.secondary:hover {
+  background: #5a6268;
+}
+
+button:active:not(:disabled), .button:active {
+  transform: translateY(1px);
+}
+
+.button-group {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.button.download {
+  background: #28a745;
+  color: white;
+}
+
+.button.download:hover {
+  background: #218838;
+}
+
+/* Alerts */
+.alert {
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border-radius: 4px;
+  border-left: 4px solid transparent;
+}
+
+.alert.error {
+  background-color: #f8d7da;
+  border-color: var(--error-color);
+  color: #721c24;
+}
+
+.alert.success {
+  background-color: #d4edda;
+  border-color: var(--success-color);
+  color: #155724;
+}
+
+/* Loading indicator */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(0, 123, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Table styles */
+.table-container {
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+  max-width: 100%;
+}
 
 .editable {
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
   font-size: 0.95rem;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .editable th,
 .editable td {
-  border: 1px solid #ddd;
-  padding: 0.4rem;
+  border: 1px solid var(--border-color);
+  padding: 0.6rem;
   text-align: left;
   vertical-align: top;
 }
 
 .editable th {
-  background-color: #f0f0f0;
+  background-color: var(--light-gray);
+  position: sticky;
+  top: 0;
+  font-weight: 600;
 }
+
+.editable tbody tr:nth-child(even) {
+  background-color: rgba(0,0,0,0.02);
+}
+
+.editable tbody tr:hover {
+  background-color: rgba(0,123,255,0.05);
+}
+
+/* Anchos específicos por columna */
+.editable th:nth-child(1), .editable td:nth-child(1) { width: 50px; } /* Enviar */
+.editable th:nth-child(2), .editable td:nth-child(2) { width: 20%; } /* Nombre */
+.editable th:nth-child(3), .editable td:nth-child(3) { width: 15%; } /* Empresa */
+.editable th:nth-child(4), .editable td:nth-child(4) { width: 25%; } /* Dirección */
+.editable th:nth-child(5), .editable td:nth-child(5) { width: 60px; } /* CP */
+.editable th:nth-child(6), .editable td:nth-child(6) { width: 12%; } /* Ciudad */
+.editable th:nth-child(7), .editable td:nth-child(7) { width: 50px; } /* Zona */
+.editable th:nth-child(8), .editable td:nth-child(8) { width: 80px; } /* Producto */
+.editable th:nth-child(9), .editable td:nth-child(9) { width: 80px; } /* País */
+.editable th:nth-child(10), .editable td:nth-child(10) { width: 50px; } /* Internacional */
 
 .editable td input[type="text"] {
   width: 100%;
@@ -81,34 +255,89 @@ button:hover {
   font-family: inherit;
   font-size: 0.95rem;
   box-sizing: border-box;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.3rem;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Anchos proporcionales por tipo de campo */
-.editable td input[type="text"][name="Dirección"] {
-  min-width: 34ch;
+.editable td input[type="text"]:focus {
+  border-color: var(--primary-color);
+  background: white;
 }
 
-.editable td input[type="text"][name="Nombre"] {
-  min-width: 22ch;
-}
-
-.editable td input[type="text"][name="Empresa"] {
-  min-width: 20ch;
-}
-
-.editable td input[type="text"][name="Ciudad"] {
-  min-width: 14ch;
-}
-
-.editable td input[type="text"][name="CP"],
-.editable td input[type="text"][name="Zona"],
-.editable td input[type="text"][name="Producto"],
-.editable td input[type="text"][name="País"] {
-  min-width: 6ch;
-}
-
-/* Centrado para checkboxes */
+/* Center checkboxes */
 .editable td input[type="checkbox"] {
   display: block;
-  margin: auto;
+  margin: 0 auto;
+}
+
+/* PDF preview */
+.pdf-container {
+  border: 1px solid var(--border-color);
+  margin-bottom: 1.5rem;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+iframe {
+  display: block;
+  width: 100%;
+  height: 600px;
+  border: none;
+}
+
+/* Instructions */
+.instructions {
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .input-group {
+    flex-direction: column;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  button, .button {
+    width: 100%;
+  }
+
+  .editable th,
+  .editable td {
+    padding: 0.4rem;
+  }
+
+  iframe {
+    height: 400px;
+  }
+
+  .table-container {
+    overflow-x: scroll;
+  }
+
+  .editable {
+    min-width: 800px; /* Ancho mínimo para que la tabla sea usable en móviles */
+  }
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+  }
 }

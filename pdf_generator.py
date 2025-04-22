@@ -1,0 +1,266 @@
+# pdf_generator.py - PDF generation functionality
+import pandas as pd
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.graphics.barcode import code128
+import logging
+import functools
+import os
+import time
+from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
+
+# Simple caching mechanism
+_pdf_cache = {}
+_cache_timeout = 300  # 5 minutes
+
+def _get_from_cache(key):
+    """Get item from cache if valid"""
+    if key in _pdf_cache:
+        timestamp, data = _pdf_cache[key]
+        if time.time() - timestamp < _cache_timeout:
+            return data
+    return None
+
+def _add_to_cache(key, data):
+    """Add item to cache"""
+    _pdf_cache[key] = (time.time(), data)
+
+def _get_data_file_timestamp():
+    """Get timestamp of data file for cache invalidation"""
+    try:
+        return os.path.getmtime("datos_hoja.csv")
+    except OSError:
+        return 0
+
+def pdf_cache(func):
+    """Decorator for caching PDF generation"""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        cache_key = f"{func.__name__}_{_get_data_file_timestamp()}"
+        cached_data = _get_from_cache(cache_key)
+
+        if cached_data:
+            logger.info(f"Using cached PDF for {func.__name__}")
+            # Return a new BytesIO with the same content
+            buffer = BytesIO()
+            buffer.write(cached_data.getvalue())
+            buffer.seek(0)
+            return buffer
+
+        # Generate new PDF
+        buffer = func(*args, **kwargs)
+
+        # Cache a copy
+        buffer_copy = BytesIO()
+        buffer_copy.write(buffer.getvalue())
+        buffer_copy.seek(0)
+        _add_to_cache(cache_key, buffer_copy)
+
+        return buffer
+    return wrapper
+
+@pdf_cache
+def generate_address_labels():
+    """Generate address labels PDF"""
+    try:
+        # Read and filter data
+        df = pd.read_csv("datos_hoja.csv", encoding="utf-8-sig", dtype=str).fillna("")
+        df = df[df["Enviar"].astype(str).str.lower().isin(["true", "1", "sí", "si"])
+                & df["Nombre"].fillna("").str.strip().ne("")
+                & df["Dirección"].fillna("").str.strip().ne("")
+                & df["Ciudad"].fillna("").str.strip().ne("")].reset_index(drop=True)
+
+        if df.empty:
+            logger.warning("No valid data for labels")
+            # Return a simple PDF with an error message
+            buffer = BytesIO()
+            c = canvas.Canvas(buffer, pagesize=A4)
+            c.drawString(50, 800, "No hay datos válidos para generar etiquetas")
+            c.save()
+            buffer.seek(0)
+            return buffer
+
+        # Create PDF
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+
+        # Label dimensions
+        COLS, ROWS = 3, 8
+        WIDTH, HEIGHT = A4
+        LABEL_H = 36 * mm
+        SIDE_MARGIN = 2 * mm
+        MARGIN = 6 * mm
+        top_margin = MARGIN / 2
+        usable_width = WIDTH - 2 * SIDE_MARGIN
+        LABEL_W = usable_width / COLS
+        SELLO_SIZE = 52
+
+        # Draw labels
+        for i, row in df.iterrows():
+            col = i % COLS
+            fila = (i // COLS) % ROWS
+            if i > 0 and i % (COLS * ROWS) == 0:
+                c.showPage()
+
+            x = SIDE_MARGIN + col * LABEL_W
+            y = HEIGHT - top_margin - ((fila + 1) * LABEL_H) + MARGIN / 2
+
+            # Extract data
+            nombre = str(row.get("Nombre", "")).strip()
+            empresa = str(row.get("Empresa", "")).strip()
+            direccion = str(row.get("Dirección", "")).strip()
+            cp = str(row.get("CP", "")).split(".")[0].strip()
+            ciudad = str(row.get("Ciudad", "")).strip()
+            zona = str(row.get("Zona", "")).strip()
+            producto = str(row.get("Producto", "")).split(".")[0].strip()
+            pais = str(row.get("País", "")).strip()
+
+            # Format address lines
+            lineas = [nombre]
+            if empresa:
+                lineas.append(empresa)
+            lineas.append(direccion)
+            bloque_final = " ".join(part for part in [cp, ciudad, zona, producto] if part.strip())
+            lineas.append(bloque_final)
+
+            # Filter out empty lines
+            lineas = [l for l in lineas if l and l.lower() != "nan"]
+
+            # Determine font size based on text length
+            max_chars = max((len(l) for l in lineas), default=0)
+            font_size = 10 if max_chars <= 35 else 9 if max_chars <= 42 else 8
+            c.setFont("Helvetica", font_size)
+
+            # Draw address lines
+            line_height = font_size + 1
+            offset_y = 12 * mm
+
+            for l in reversed(lineas):
+                offset_y += line_height
+                c.drawString(x + 2 * mm, y + offset_y, l)
+
+            # Draw separator line and return address
+            c.setLineWidth(0.4)
+            c.line(x + 1 * mm, y + 8 * mm, x + LABEL_W - 1 * mm, y + 8 * mm)
+            c.setFont("Helvetica", 7)
+            c.drawString(x + 2 * mm, y + 4.2 * mm,
+                        "Rte: Revista Salvaje | Apdo. Correos 15024 CP 28080")
+
+            # Draw appropriate stamp image
+            internacional = str(row.get("Internacional", "")).strip().lower() in ["true", "1", "sí", "si"]
+            sello = "sellos/Correos-Sello_Extranjero.png" if internacional else "sellos/Correos-Sello_Nacional.png"
+            sello_x = x + LABEL_W - SELLO_SIZE - 1
+            sello_y = y + LABEL_H - SELLO_SIZE + 4
+
+            # Error handling for stamp images
+            try:
+                c.drawImage(sello,
+                            sello_x,
+                            sello_y,
+                            width=SELLO_SIZE,
+                            height=SELLO_SIZE,
+                            preserveAspectRatio=True,
+                            mask='auto')
+            except Exception as e:
+                logger.error(f"Error drawing stamp image: {str(e)}")
+                # Draw placeholder rectangle instead
+                c.rect(sello_x, sello_y, SELLO_SIZE, SELLO_SIZE)
+                c.setFont("Helvetica", 8)
+                c.drawString(sello_x + 5, sello_y + SELLO_SIZE/2, 
+                             "NACIONAL" if not internacional else "INTERNACIONAL")
+
+        c.save()
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        logger.error(f"Error generating address labels: {str(e)}", exc_info=True)
+        raise
+
+@pdf_cache
+def generate_or_labels():
+    """Generate OR-type labels with barcodes"""
+    try:
+        # Read and filter data
+        df = pd.read_csv("datos_hoja.csv", encoding="utf-8-sig", dtype=str).fillna("")
+        df = df[df["Enviar"].astype(str).str.lower().isin(["true", "1", "sí", "si"])]
+        df = df[(df["Nombre"].str.strip() != "")
+                & (df["Dirección"].str.strip() != "") 
+                & (df["Ciudad"].str.strip() != "")]
+
+        if df.empty:
+            logger.warning("No valid data for OR labels")
+            buffer = BytesIO()
+            c = canvas.Canvas(buffer, pagesize=A4)
+            c.drawString(50, 800, "No hay datos válidos para generar etiquetas OR")
+            c.save()
+            buffer.seek(0)
+            return buffer
+
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+
+        # Label dimensions
+        COLS, ROWS = 2, 5
+        WIDTH, HEIGHT = A4
+        LABEL_W = WIDTH / COLS
+        LABEL_H = HEIGHT / ROWS
+        MARGIN = 6 * mm
+
+        # Base ID for numbering
+        id_base = 921
+
+        # Generate label data
+        etiquetas = []
+        for i, (_, row) in enumerate(df.iterrows()):
+            cp = str(row["CP"]).zfill(5)
+            id_envio = str(id_base + i).zfill(9)
+            codigo = f"OR6BNA93{id_envio}{cp}X"
+            etiquetas.append((cp, codigo))
+
+        # Draw labels
+        for i, (cp, codigo) in enumerate(etiquetas):
+            col = i % COLS
+            fila = (i // COLS) % ROWS
+            if i > 0 and i % (COLS * ROWS) == 0:
+                c.showPage()
+
+            x = col * LABEL_W + MARGIN / 2
+            y = HEIGHT - ((fila + 1) * LABEL_H) + MARGIN / 2
+            w = LABEL_W - MARGIN
+            h = LABEL_H - MARGIN
+
+            # Draw border
+            c.setLineWidth(1)
+            c.rect(x, y, w, h)
+
+            # Draw header with product type and postal code
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(x + 10, y + h - 24, "Libros (Ordinario)")
+            c.drawRightString(x + w - 10, y + h - 24, f"CP {cp}")
+
+            # Generate and draw barcode
+            try:
+                barcode = code128.Code128(codigo, barHeight=h - 70, barWidth=1)
+                bw, bh = barcode.wrapOn(c, w - 16, h)
+                barcode.drawOn(c, x + 8, y + 36)
+            except Exception as e:
+                logger.error(f"Error drawing barcode: {str(e)}")
+                # Draw placeholder for barcode
+                c.rect(x + 8, y + 36, w - 16, h - 70)
+                c.setFont("Helvetica", 8)
+                c.drawCentredString(x + w/2, y + 36 + (h-70)/2, "ERROR BARCODE")
+
+            # Draw tracking code
+            c.setFont("Helvetica-Bold", 12)
+            c.drawCentredString(x + w / 2, y + 18, codigo)
+
+        c.save()
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        logger.error(f"Error generating OR labels: {str(e)}", exc_info=True)
+        raise

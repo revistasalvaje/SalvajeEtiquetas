@@ -1,7 +1,7 @@
 Enviar,Nombre,Empresa,Dirección,CP,Ciudad,Zona,Producto,País,Internacional
-True,Ana Escario,,Avda. de la Paz 31,22004,Huesca,A,,,False
-True,Laura Sanjuan López,Juzgado de lo Mercantil nº 1,"C/ Málaga 2, torre 2, planta 8",35001,Las Palmas de G.C.,A,23,,False
+False,Ana Escario,,Avda. de la Paz 31,22004,Huesca,A,,,False
+True,Laura Sanjuan López,Juzgado de lo Mercantil nº 1,"C/ Málaga 2, torre 2, planta 8",35001,Las Palmas de G.C.,A,23,,True
 True,Javier Vega Sánchez,,"C/ Fco. Jiménez Lomas 4, blq. 3, 5ºA",29004,Málaga,A,24,,False
-True,Fernando Taranco Delgado,,"C/ Princesa 75, 7º int. izq.",28008,Madrid,A,24,,False
+False,Fernando Taranco Delgado,,"C/ Princesa 75, 7º int. izq.",28008,Madrid,A,24,,False
 True,José Barbado,Franela,C/ Juan Mambrilla 3,47003,Valladolid,A,24,,False
 True,Ignacio Gomez Aparicio,,Avda. Marques de Valdecilla 38A,39110,Soto de la Marina,B,24,,False
