@@ -97,6 +97,20 @@ def limpiar_datos(df):
     return data
 
 
+def intentar_cargar_sello(internacional=False):
+    """Intenta cargar el sello desde archivos estáticos"""
+    try:
+        sello_file = "sello_extranjero.png" if internacional else "sello_nacional.png"
+        # Buscar el archivo en varias ubicaciones posibles
+        for ruta in ["sellos/", "./sellos/", "../sellos/", "/tmp/sellos/"]:
+            path = ruta + sello_file
+            if os.path.exists(path):
+                return path
+    except:
+        pass
+    return None
+
+
 # === RUTAS PRINCIPALES ===
 
 
@@ -166,20 +180,6 @@ def editar():
 
 # === RUTA PARA PDF DE DIRECCIONES ===
 
-def intentar_cargar_sello(internacional=False):
-    """Intenta cargar el sello desde archivos estáticos"""
-    try:
-        sello_file = "sello_extranjero.png" if internacional else "sello_nacional.png"
-        # Buscar el archivo en varias ubicaciones posibles
-        for ruta in ["sellos/", "./sellos/", "../sellos/", "/tmp/sellos/"]:
-            path = ruta + sello_file
-            if os.path.exists(path):
-                return path
-    except:
-        pass
-    return None
-
-
 @app.route("/etiquetas.pdf")
 def generar_pdf():
     df = pd.read_csv("datos_hoja.csv", encoding="utf-8-sig",
@@ -193,24 +193,28 @@ def generar_pdf():
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
 
-    # Configuración exacta según PDF de muestra (rejilla 3x8)
+    # Configuración exacta con medidas obtenidas con regla
     A4_WIDTH, A4_HEIGHT = A4
     COLS, ROWS = 3, 8
 
-    # Márgenes ajustados según el PDF de muestra
-    MARGIN_LEFT = 9 * mm
-    MARGIN_RIGHT = 9 * mm
-    MARGIN_TOP = 13 * mm
-    MARGIN_BOTTOM = 13 * mm
+    # Márgenes superiores e inferiores reducidos
+    MARGIN_TOP = 6 * mm        # Reducido de 8mm a 6mm
+    MARGIN_BOTTOM = 6 * mm     # Reducido de 8mm a 6mm
 
-    # Dimensiones de cada etiqueta
-    LABEL_WIDTH = (A4_WIDTH - MARGIN_LEFT - MARGIN_RIGHT) / COLS
-    LABEL_HEIGHT = (A4_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM) / ROWS
+    # Sin márgenes laterales para alinear con bordes de página
+    MARGIN_LEFT = 0 * mm
+    MARGIN_RIGHT = 0 * mm
+
+    # Cálculo de dimensiones de etiquetas
+    USABLE_HEIGHT = A4_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM
+    LABEL_HEIGHT = USABLE_HEIGHT / ROWS  # Altura calculada automáticamente
+    LABEL_WIDTH = A4_WIDTH / COLS
 
     # Medidas internas de la etiqueta
-    PADDING = 2 * mm
-    REMITE_HEIGHT = 4 * mm  # Altura reducida para el remitente
-    DIVIDER_Y = 8 * mm     # Posición Y de la línea divisoria reducida
+    PADDING_LATERAL = 4 * mm    # Padding lateral aumentado a 4mm
+    PADDING_VERTICAL = 2 * mm   # Padding vertical básico
+    REMITE_HEIGHT = 4 * mm      # Altura para el remitente
+    DIVIDER_Y = 8 * mm          # Posición Y de la línea divisoria reducida
 
     # Tamaño y posición del sello - ahora justo en la esquina superior derecha
     SELLO_SIZE = 16 * mm
@@ -225,29 +229,29 @@ def generar_pdf():
         if i > 0 and i % (COLS * ROWS) == 0:
             c.showPage()
 
-        # Coordenadas base de la etiqueta
+        # Coordenadas base de la etiqueta (sin separación entre columnas)
         x_base = MARGIN_LEFT + (col * LABEL_WIDTH)
         y_base = A4_HEIGHT - MARGIN_TOP - ((fila + 1) * LABEL_HEIGHT)
 
         # ---- Dibujar primero el remitente y línea divisoria ----
         # Línea divisoria
         c.setLineWidth(0.4)
-        c.line(x_base + PADDING, 
+        c.line(x_base + PADDING_LATERAL, 
                y_base + DIVIDER_Y, 
-               x_base + LABEL_WIDTH - PADDING, 
+               x_base + LABEL_WIDTH - PADDING_LATERAL, 
                y_base + DIVIDER_Y)
 
         # Remitente (más cerca a la línea)
         c.setFont("Helvetica", 7)
-        c.drawString(x_base + PADDING, 
+        c.drawString(x_base + PADDING_LATERAL, 
                      y_base + DIVIDER_Y - REMITE_HEIGHT, 
                      "Rte: Revista Salvaje | Apdo. Correos 15024 CP 28080")
 
         # ---- Espacio para el sello ----
         internacional = str(row.get("Internacional", "")).strip().lower() in ["true", "1", "sí"]
 
-        # Posición del sello - más alto
-        sello_x = x_base + LABEL_WIDTH - SELLO_SIZE - SELLO_MARGIN
+        # Posición del sello - alineado con el borde derecho de la línea
+        sello_x = x_base + LABEL_WIDTH - PADDING_LATERAL - SELLO_SIZE
         sello_y = y_base + LABEL_HEIGHT - SELLO_SIZE - SELLO_MARGIN
 
         # Intentar cargar sello desde archivo
@@ -284,8 +288,8 @@ def generar_pdf():
             lineas.append(pais)
 
         # Calcular el área disponible para texto
-        text_width = LABEL_WIDTH - (2 * PADDING)
-        text_height = LABEL_HEIGHT - DIVIDER_Y - (2 * PADDING)
+        text_width = LABEL_WIDTH - (2 * PADDING_LATERAL)
+        text_height = LABEL_HEIGHT - DIVIDER_Y - (2 * PADDING_VERTICAL)
 
         # Calcular tamaño óptimo de fuente - para evitar cortes
         max_chars = max((len(line) for line in lineas), default=0)
@@ -303,8 +307,8 @@ def generar_pdf():
         line_height = font_size * 1.1  # Interlineado reducido
 
         # Posicionamiento vertical mejorado
-        # 1. Comenzar con más espacio desde arriba para bajar el texto
-        top_margin = 6 * mm  # Margen superior reducido
+        # 1. Comenzar con menos espacio desde arriba (reducido 5mm)
+        top_margin = 1 * mm  # Margen superior muy reducido
         # 2. Distribuir el espacio disponible
         available_height = LABEL_HEIGHT - DIVIDER_Y - top_margin
         # 3. Centrar las líneas en el espacio restante
@@ -327,17 +331,17 @@ def generar_pdf():
             current_font_size = font_size
             line_width = len(line) * current_font_size * 0.6
 
-            while line_width > text_width and current_font_size > 5:
+            while line_width > (LABEL_WIDTH - 2 * PADDING_LATERAL) and current_font_size > 5:
                 current_font_size -= 0.5
                 line_width = len(line) * current_font_size * 0.6
 
             # Usar tamaño de fuente específico para esta línea si fue necesario reducirla
             if current_font_size != font_size:
                 c.setFont("Helvetica", current_font_size)
-                c.drawString(x_base + PADDING, y_pos, line)
+                c.drawString(x_base + PADDING_LATERAL, y_pos, line)
                 c.setFont("Helvetica", font_size)  # Restaurar fuente original
             else:
-                c.drawString(x_base + PADDING, y_pos, line)
+                c.drawString(x_base + PADDING_LATERAL, y_pos, line)
 
         # Dibujar sello al final (para que quede encima)
         if sello_path:
@@ -369,12 +373,6 @@ def generar_pdf():
             c.setFont("Helvetica-Bold", 9)
             c.drawCentredString(sello_x + SELLO_SIZE/2, sello_y + SELLO_SIZE/2, "LIBROS")
             c.restoreState()
-
-    c.save()
-    buffer.seek(0)
-    return send_file(buffer,
-                     mimetype="application/pdf",
-                     download_name="etiquetas.pdf")
 
     c.save()
     buffer.seek(0)
