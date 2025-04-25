@@ -1,9 +1,9 @@
 Enviar,Nombre,Empresa,Dirección,CP,Ciudad,Zona,Producto,País,Internacional
-False,Ana Escario,,Avda. de la Paz 31,22004,Huesca,A,,,True
-False,Víctor Martínez Martínez,,"Avenida De La Paz 3, Esc Izq. 6A",09004,Burgos,B,,,True
-False,Paloma Vega Escarpa,,"C/ Cigarral 2, 3ºA",49002,Zamora,A,20+23,,False
-False,Mara Gonçalves,,Rua Salgueiro Maia 17 r/c esq.,8600,Lagos,B,22+23+24,,False
-True,Laura Sanjuan López,Juzgado de lo Mercantil nº 1,"C/ Málaga 2, torre 2, planta 8",35001,Las Palmas de G.C.,A,23,,True
+True,Ana Escario,,Avda. de la Paz 31,22004,Huesca,A,,,False
+True,Víctor Martínez Martínez,,"Avenida De La Paz 3, Esc Izq. 6A",09004,Burgos,B,,,False
+True,Paloma Vega Escarpa,,"C/ Cigarral 2, 3ºA",49002,Zamora,A,20+23,,False
+True,Mara Gonçalves,,Rua Salgueiro Maia 17 r/c esq.,8600,Lagos,B,22+23+24,,False
+True,Laura Sanjuan López,Juzgado de lo Mercantil nº 1,"C/ Málaga 2, torre 2, planta 8",35001,Las Palmas de G.C.,A,23,,False
 True,Regina Touceda Rey,,A Palma 17,36670,Cuntis,B,23+24,,False
 True,Javier Vega Sánchez,,"C/ Fco. Jiménez Lomas 4, blq. 3, 5ºA",29004,Málaga,A,24,,False
 True,Fernando Taranco Delgado,,"C/ Princesa 75, 7º int. izq.",28008,Madrid,A,24,,False

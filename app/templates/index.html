@@ -11,35 +11,70 @@
         <header>
             <h1>Salvajetiquetas</h1>
             <p class="subtitle">Generador de etiquetas para envíos postales</p>
+            <nav class="main-nav">
+                <a href="{{ url_for('woocommerce.importar_pedidos') }}" class="nav-link">Importar desde WooCommerce</a>
+                <a href="{{ url_for('admin.configurar_productos') }}" class="nav-link">Configurar Productos</a>
+            </nav>
         </header>
 
         <section class="form-section">
-            <form method="POST" id="sheets-form">
-                <div class="form-group">
-                    <label for="sheet_url">URL de Google Sheets:</label>
-                    <div class="input-group">
-                        <input type="text" name="sheet_url" id="sheet_url" required
-                                placeholder="https://docs.google.com/spreadsheets/d/..."
-                                pattern=".*docs\.google\.com\/spreadsheets\/d\/.*"
-                                title="Introduce una URL válida de Google Sheets">
-                        <button type="submit" id="submit-btn">Cargar hoja</button>
+            <h2>Cargar datos</h2>
+            
+            <div class="tabs">
+                <button class="tab-btn active" onclick="openTab(event, 'sheets-tab')">Google Sheets</button>
+                <button class="tab-btn" onclick="openTab(event, 'woo-tab')">WooCommerce</button>
+            </div>
+            
+            <div id="sheets-tab" class="tab-content active">
+                <form method="POST" action="{{ url_for('main.cargar_google_sheets') }}" id="sheets-form">
+                    <div class="form-group">
+                        <label for="sheet_url">URL de Google Sheets:</label>
+                        <div class="input-group">
+                            <input type="text" name="sheet_url" id="sheet_url" required
+                                    placeholder="https://docs.google.com/spreadsheets/d/..."
+                                    pattern=".*docs\.google\.com\/spreadsheets\/d\/.*"
+                                    title="Introduce una URL válida de Google Sheets">
+                            <button type="submit" id="submit-btn" class="btn">Cargar hoja</button>
+                        </div>
+                        <small class="form-help">La hoja debe estar compartida con permisos de lectura</small>
                     </div>
-                    <small class="form-help">La hoja debe estar compartida con permisos de lectura</small>
-                </div>
-            </form>
+                </form>
+            </div>
+            
+            <div id="woo-tab" class="tab-content">
+                <form method="POST" action="{{ url_for('woocommerce.importar_pedidos') }}">
+                    <div class="form-group">
+                        <label for="woo_days">Importar pedidos de los últimos:</label>
+                        <select name="woo_days" id="woo_days">
+                            <option value="1">1 día</option>
+                            <option value="3">3 días</option>
+                            <option value="7" selected>7 días</option>
+                            <option value="14">14 días</option>
+                            <option value="30">30 días</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="woo_status">Estado:</label>
+                        <select name="woo_status" id="woo_status">
+                            <option value="processing" selected>Procesando</option>
+                            <option value="completed">Completado</option>
+                            <option value="on-hold">En espera</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn">Importar desde WooCommerce</button>
+                </form>
+            </div>
         </section>
 
-        {% if error %}
-        <div class="alert error" role="alert">
-            <strong>Error:</strong> {{ error }}
-        </div>
-        {% endif %}
-
-        {% if success %}
-        <div class="alert success" role="alert">
-            {{ success }}
-        </div>
-        {% endif %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert {{ category }}" role="alert">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
         {% if preview %}
         <section class="data-section">
@@ -83,8 +118,8 @@
                 </div>
 
                 <div class="button-group">
-                    <button type="submit" id="save-btn" class="primary">Guardar y regenerar PDF</button>
-                    <button type="button" id="or-btn" class="secondary">Generar etiquetas OR</button>
+                    <button type="submit" id="save-btn" class="btn primary">Guardar y regenerar PDF</button>
+                    <button type="button" id="or-btn" class="btn secondary">Generar etiquetas OR</button>
                 </div>
             </form>
 
@@ -95,9 +130,7 @@
 
             <div id="status-message" class="alert" style="display: none;"></div>
         </section>
-        {% endif %}
 
-        {% if success %}
         <section class="preview-section">
             <h2>Previsualización de etiquetas</h2>
             <div class="pdf-container">
@@ -111,6 +144,25 @@
     </div>
 
     <script>
+    // Función para cambiar entre pestañas
+    function openTab(evt, tabName) {
+        // Ocultar todos los contenidos de pestañas
+        var tabContents = document.getElementsByClassName("tab-content");
+        for (var i = 0; i < tabContents.length; i++) {
+            tabContents[i].classList.remove("active");
+        }
+
+        // Desactivar todos los botones de pestañas
+        var tabButtons = document.getElementsByClassName("tab-btn");
+        for (var i = 0; i < tabButtons.length; i++) {
+            tabButtons[i].classList.remove("active");
+        }
+
+        // Mostrar la pestaña actual y activar el botón
+        document.getElementById(tabName).classList.add("active");
+        evt.currentTarget.classList.add("active");
+    }
+    
     document.addEventListener('DOMContentLoaded', function() {
         const editarForm = document.getElementById('editar-form');
         const orBtn = document.getElementById('or-btn');
@@ -157,7 +209,7 @@
                 });
 
                 // Send data to server
-                fetch('/editar', {
+                fetch('{{ url_for("main.editar") }}', {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json'

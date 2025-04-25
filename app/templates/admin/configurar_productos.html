@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar Productos - Salvajetiquetas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .producto-container, .combo-container {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .producto-row, .combo-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+            align-items: center;
+        }
+
+        .producto-row input, .combo-row input {
+            flex: 1;
+            min-width: 0;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .btn-add {
+            margin-top: 0.5rem;
+            background-color: #28a745;
+        }
+
+        .btn-remove {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 0.3rem 0.6rem;
+            cursor: pointer;
+        }
+
+        .section-title {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 0.5rem;
+        }
+
+        .help-text {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        .nav-link {
+            display: inline-block;
+            margin-right: 1rem;
+            text-decoration: none;
+            color: #007BFF;
+        }
+
+        .nav-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Configuración de Productos</h1>
+            <div>
+                <a href="/" class="nav-link">← Volver a Inicio</a>
+                <a href="{{ url_for('woocommerce.importar_pedidos') }}" class="nav-link">Importar desde WooCommerce</a>
+                <a href="{{ url_for('woocommerce.listar_pedidos') }}" class="nav-link">Ver Pedidos WooCommerce</a>
+            </div>
+        </header>
+
+        {% if mensaje %}
+        <div class="alert {% if 'Error' in mensaje %}error{% else %}success{% endif %}" role="alert">
+            {{ mensaje }}
+        </div>
+        {% endif %}
+
+        <form method="POST">
+            <h2 class="section-title">Productos Individuales</h2>
+            <p class="help-text">
+                Define cada producto junto con su código corto para las etiquetas. 
+                El ID debe corresponder al ID del producto en WooCommerce o parte de su nombre.
+            </p>
+
+            <div id="productos-container">
+                {% for producto_id, codigo in productos.items() %}
+                <div class="producto-row">
+                    <input type="text" name="producto_id[]" placeholder="ID del producto" value="{{ producto_id }}" required>
+                    <input type="text" name="codigo[]" placeholder="Código corto" value="{{ codigo }}" required>
+                    <button type="button" class="btn-remove" onclick="removeRow(this)">×</button>
+                </div>
+                {% endfor %}
+
+                <!-- Fila vacía para añadir nuevo producto -->
+                <div class="producto-row">
+                    <input type="text" name="producto_id[]" placeholder="ID del producto">
+                    <input type="text" name="codigo[]" placeholder="Código corto">
+                    <button type="button" class="btn-remove" onclick="removeRow(this)">×</button>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-add" onclick="addProductRow()">+ Añadir producto</button>
+
+            <h2 class="section-title">Combos y Packs</h2>
+            <p class="help-text">
+                Define combos o packs que contengan múltiples productos. 
+                En "Contenido" escribe los códigos cortos separados por comas (ej: "24,CS").
+            </p>
+
+            <div id="combos-container">
+                {% for combo_id, contenido in combos.items() %}
+                <div class="combo-row">
+                    <input type="text" name="combo_id[]" placeholder="ID del combo/pack" value="{{ combo_id }}" required>
+                    <input type="text" name="combo_contenido[]" placeholder="Códigos separados por comas" value="{{ ','.join(contenido) }}" required>
+                    <button type="button" class="btn-remove" onclick="removeRow(this)">×</button>
+                </div>
+                {% endfor %}
+
+                <!-- Fila vacía para añadir nuevo combo -->
+                <div class="combo-row">
+                    <input type="text" name="combo_id[]" placeholder="ID del combo/pack">
+                    <input type="text" name="combo_contenido[]" placeholder="Códigos separados por comas">
+                    <button type="button" class="btn-remove" onclick="removeRow(this)">×</button>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-add" onclick="addComboRow()">+ Añadir combo</button>
+
+            <div style="margin-top: 2rem;">
+                <button type="submit" class="btn">Guardar configuración</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Añadir nueva fila de producto
+        function addProductRow() {
+            const container = document.getElementById('productos-container');
+            const row = document.createElement('div');
+            row.className = 'producto-row';
+            row.innerHTML = `
+                <input type="text" name="producto_id[]" placeholder="ID del producto" required>
+                <input type="text" name="codigo[]" placeholder="Código corto" required>
+                <button type="button" class="btn-remove" onclick="removeRow(this)">×</button>
+            `;
+            container.appendChild(row);
+        }
+
+        // Añadir nueva fila de combo
+        function addComboRow() {
+            const container = document.getElementById('combos-container');
+            const row = document.createElement('div');
+            row.className = 'combo-row';
+            row.innerHTML = `
+                <input type="text" name="combo_id[]" placeholder="ID del combo/pack" required>
+                <input type="text" name="combo_contenido[]" placeholder="Códigos separados por comas" required>
+                <button type="button" class="btn-remove" onclick="removeRow(this)">×</button>
+            `;
+            container.appendChild(row);
+        }
+
+        // Eliminar fila
+        function removeRow(button) {
+            const row = button.parentNode;
+            const inputs = row.querySelectorAll('input');
+            const isEmpty = Array.from(inputs).every(input => !input.value);
+
+            if (isEmpty || confirm('¿Estás seguro de que quieres eliminar esta fila?')) {
+                row.parentNode.removeChild(row);
+            }
+        }
+
+        // Limpiar filas vacías antes de enviar
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const productosRows = document.querySelectorAll('#productos-container .producto-row');
+            const combosRows = document.querySelectorAll('#combos-container .combo-row');
+
+            // Función para verificar si una fila está vacía
+            function isRowEmpty(row) {
+                const inputs = row.querySelectorAll('input');
+                return Array.from(inputs).every(input => !input.value);
+            }
+
+            // Verificar filas de productos
+            productosRows.forEach(row => {
+                if (isRowEmpty(row)) {
+                    row.parentNode.removeChild(row);
+                }
+            });
+
+            // Verificar filas de combos
+            combosRows.forEach(row => {
+                if (isRowEmpty(row)) {
+                    row.parentNode.removeChild(row);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
