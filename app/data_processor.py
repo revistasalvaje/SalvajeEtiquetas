@@ -1,4 +1,4 @@
-# data_processor.py - Data processing functions
+# app/data_processor.py - Data processing functions
 import pandas as pd
 from urllib.parse import urlparse
 import requests
@@ -6,36 +6,10 @@ from io import StringIO
 import unicodedata
 import re
 import logging
+import os
+from app.utils import extract_id_from_url, normalize_text, find_column
 
 logger = logging.getLogger(__name__)
-
-def extract_id_from_url(url):
-    """Extract Google Sheet ID from URL"""
-    if not url or "/d/" not in url:
-        raise ValueError("URL no válida o no reconocida")
-
-    try:
-        return url.split("/d/")[1].split("/")[0]
-    except IndexError:
-        raise ValueError("No se pudo extraer ID de Google Sheets desde la URL")
-
-def normalize_text(text):
-    """Normalize text for comparison purposes"""
-    text = str(text).encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
-    text = text.lower()
-    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    text = re.sub(r"[^a-z0-9]", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-def find_column(possible_names, normalized_columns):
-    """Find column in dataframe by possible names"""
-    for possible in possible_names:
-        possible_norm = normalize_text(possible)
-        for col_real, col_norm in normalized_columns.items():
-            if possible_norm in col_norm:
-                logger.info(f"Campo '{possible}' detectado como → '{col_real}'")
-                return col_real
-    return None
 
 def clean_data(df):
     """Process and normalize input data"""
@@ -122,7 +96,15 @@ def process_sheet_data(url):
         df = df.sort_values(by=["Producto", "Zona"], na_position="last")
 
         # Save to CSV
-        df.to_csv("datos_hoja.csv", index=False)
+        # Ensure data directory exists
+        data_dir = os.path.join('app', 'data')
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+
+        # Save to new location
+        csv_path = os.path.join(data_dir, 'datos_hoja.csv')
+        df.to_csv(csv_path, index=False)
+        logger.info(f"Datos guardados en {csv_path}")
 
         return df.to_dict(orient="records")
     except Exception as e:
@@ -158,7 +140,14 @@ def save_edited_data(data):
     df["Internacional"] = df["Internacional"].astype(bool)
     df["Enviar"] = df["Enviar"].astype(bool)
 
-    # Save to CSV
-    df.to_csv("datos_hoja.csv", index=False)
+    # Ensure data directory exists
+    data_dir = os.path.join('app', 'data')
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
+    # Save to new location
+    csv_path = os.path.join(data_dir, 'datos_hoja.csv')
+    df.to_csv(csv_path, index=False)
+    logger.info(f"Datos editados guardados en {csv_path}")
 
     return True

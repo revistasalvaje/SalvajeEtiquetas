@@ -1,4 +1,4 @@
-# pdf_generator.py - PDF generation functionality
+# app/pdf_generator.py - PDF generation functionality
 import pandas as pd
 from io import BytesIO
 from reportlab.pdfgen import canvas
@@ -10,6 +10,7 @@ import functools
 import os
 import time
 from datetime import datetime, timedelta
+from flask import current_app
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +33,13 @@ def _add_to_cache(key, data):
 def _get_data_file_timestamp():
     """Get timestamp of data file for cache invalidation"""
     try:
-        return os.path.getmtime("datos_hoja.csv")
+        data_file_path = os.path.join('app', 'data', 'datos_hoja.csv')
+        if not os.path.exists(data_file_path):
+            data_file_path = 'datos_hoja.csv'  # Fallback a la ubicación antigua
+
+        return os.path.getmtime(data_file_path)
     except OSError:
+        logger.warning("No se encontró el archivo de datos")
         return 0
 
 def pdf_cache(func):
@@ -63,12 +69,46 @@ def pdf_cache(func):
         return buffer
     return wrapper
 
+def _intentar_cargar_sello(internacional=False):
+    """Try to load stamp image from static files"""
+    sello_file = "sello_extranjero.png" if internacional else "sello_nacional.png"
+
+    # Lista de posibles ubicaciones para los sellos
+    rutas = [
+        os.path.join('app', 'static', 'sellos', sello_file),
+        os.path.join('static', 'sellos', sello_file),
+        os.path.join('sellos', sello_file),
+        os.path.join('/tmp', 'sellos', sello_file)
+    ]
+
+    for ruta in rutas:
+        if os.path.exists(ruta):
+            logger.info(f"Sello encontrado en: {ruta}")
+            return ruta
+
+    logger.warning(f"No se encontró el archivo de sello: {sello_file}")
+    return None
+
+def _read_data_file():
+    """Read data from CSV file handling different locations"""
+    posibles_rutas = [
+        os.path.join('app', 'data', 'datos_hoja.csv'),
+        'datos_hoja.csv'
+    ]
+
+    for ruta in posibles_rutas:
+        if os.path.exists(ruta):
+            logger.info(f"Leyendo datos desde: {ruta}")
+            return pd.read_csv(ruta, encoding="utf-8-sig", dtype=str).fillna("")
+
+    raise FileNotFoundError("No se encontró el archivo datos_hoja.csv")
+
 @pdf_cache
 def generate_address_labels():
     """Generate address labels PDF"""
     try:
         # Read and filter data
-        df = pd.read_csv("datos_hoja.csv", encoding="utf-8-sig", dtype=str).fillna("")
+        df = _read_data_file()
         df = df[df["Enviar"].astype(str).str.lower().isin(["true", "1", "sí", "si"])
                 & df["Nombre"].fillna("").str.strip().ne("")
                 & df["Dirección"].fillna("").str.strip().ne("")
@@ -152,26 +192,32 @@ def generate_address_labels():
 
             # Draw appropriate stamp image
             internacional = str(row.get("Internacional", "")).strip().lower() in ["true", "1", "sí", "si"]
-            sello = "sellos/Correos-Sello_Extranjero.png" if internacional else "sellos/Correos-Sello_Nacional.png"
+            sello = _intentar_cargar_sello(internacional)
             sello_x = x + LABEL_W - SELLO_SIZE - 1
             sello_y = y + LABEL_H - SELLO_SIZE + 4
 
             # Error handling for stamp images
             try:
-                c.drawImage(sello,
-                            sello_x,
-                            sello_y,
-                            width=SELLO_SIZE,
-                            height=SELLO_SIZE,
-                            preserveAspectRatio=True,
-                            mask='auto')
+                if sello:
+                    c.drawImage(sello,
+                                sello_x,
+                                sello_y,
+                                width=SELLO_SIZE,
+                                height=SELLO_SIZE,
+                                preserveAspectRatio=True,
+                                mask='auto')
+                else:
+                    # Draw placeholder rectangle
+                    c.rect(sello_x, sello_y, SELLO_SIZE, SELLO_SIZE)
+                    c.setFont("Helvetica", 8)
+                    c.drawString(sello_x + 5, sello_y + SELLO_SIZE/2, 
+                                "NACIONAL" if not internacional else "INTERNACIONAL")
             except Exception as e:
                 logger.error(f"Error drawing stamp image: {str(e)}")
-                # Draw placeholder rectangle instead
+                # Draw placeholder rectangle
                 c.rect(sello_x, sello_y, SELLO_SIZE, SELLO_SIZE)
-                c.setFont("Helvetica", 8)
-                c.drawString(sello_x + 5, sello_y + SELLO_SIZE/2, 
-                             "NACIONAL" if not internacional else "INTERNACIONAL")
+                c.setFont("Helvetica-Bold", 9)
+                c.drawCentredString(sello_x + SELLO_SIZE/2, sello_y + SELLO_SIZE/2, "LIBROS")
 
         c.save()
         buffer.seek(0)
@@ -185,7 +231,7 @@ def generate_or_labels():
     """Generate OR-type labels with barcodes"""
     try:
         # Read and filter data
-        df = pd.read_csv("datos_hoja.csv", encoding="utf-8-sig", dtype=str).fillna("")
+        df = _read_data_file()
         df = df[df["Enviar"].astype(str).str.lower().isin(["true", "1", "sí", "si"])]
         df = df[(df["Nombre"].str.strip() != "")
                 & (df["Dirección"].str.strip() != "") 
