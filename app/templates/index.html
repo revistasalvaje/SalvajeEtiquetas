@@ -118,8 +118,17 @@
                 </div>
 
                 <div class="button-group">
-                    <button type="submit" id="save-btn" class="btn primary">Guardar y regenerar PDF</button>
-                    <button type="button" id="or-btn" class="btn secondary">Generar etiquetas OR</button>
+                    <a href="{{ url_for('main.generar_pdf') }}" class="button download" download="etiquetas.pdf">
+                        Descargar Etiquetas (PDF)
+                    </a>
+
+                    <a href="{{ url_for('main.generar_etiquetas_or') }}" class="button secondary" target="_blank">
+                        Descargar Etiquetas OR
+                    </a>
+
+                    <a href="{{ url_for('main.generar_calibracion') }}" class="button secondary" target="_blank" style="background-color: #17a2b8; color: white; border: 1px solid #138496;">
+                        📏 Ver Guías de Calibración
+                    </a>
                 </div>
             </form>
 

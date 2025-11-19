@@ -66,3 +66,17 @@ def generar_etiquetas_or():
     except Exception as e:
         logger.error(f"Error generating OR labels: {str(e)}", exc_info=True)
         return f"Error al generar etiquetas OR: {str(e)}", 500
+
+@main_bp.route("/etiquetas_calibracion.pdf")
+def generar_calibracion():
+    """Generar etiquetas con guías visuales para calibrar impresora"""
+    try:
+        # Llamamos a la función activando el modo guías
+        buffer = generate_address_labels(show_guides=True)
+        return send_file(buffer,
+                         mimetype="application/pdf",
+                         as_attachment=False,
+                         download_name="etiquetas_calibracion.pdf")
+    except Exception as e:
+        logger.error(f"Error generating calibration PDF: {str(e)}", exc_info=True)
+        return f"Error al generar guías: {str(e)}", 500

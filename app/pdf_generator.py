@@ -11,6 +11,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from flask import current_app
+from reportlab.lib.colors import cyan
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +105,8 @@ def _read_data_file():
     raise FileNotFoundError("No se encontró el archivo datos_hoja.csv")
 
 @pdf_cache
-def generate_address_labels():
-    """Generate address labels PDF"""
+def generate_address_labels(show_guides=False):
+    """Generate address labels PDF with optional calibration guides"""
     try:
         # Read and filter data
         df = _read_data_file()
@@ -114,9 +115,9 @@ def generate_address_labels():
                 & df["Dirección"].fillna("").str.strip().ne("")
                 & df["Ciudad"].fillna("").str.strip().ne("")].reset_index(drop=True)
 
-        if df.empty:
+        # Permitir generar PDF vacío si estamos en modo calibración (para ver solo las líneas)
+        if df.empty and not show_guides:
             logger.warning("No valid data for labels")
-            # Return a simple PDF with an error message
             buffer = BytesIO()
             c = canvas.Canvas(buffer, pagesize=A4)
             c.drawString(50, 800, "No hay datos válidos para generar etiquetas")
@@ -128,105 +129,132 @@ def generate_address_labels():
         buffer = BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
 
-        # --- INICIO DE CAMBIOS: Ajuste de dimensiones ---
+        # --- CONFIGURACIÓN DE MEDIDAS (AJUSTADO A TUS NECESIDADES) ---
         COLS, ROWS = 3, 8
         WIDTH, HEIGHT = A4
 
-        # Ajusta este valor según tu papel. 
-        # Si tus etiquetas tocan el borde del papel, pon 0.
-        # Si tienen un borde blanco a los lados, mídelo con una regla (ej: 7mm).
-        # El valor actual de 2 causa el efecto de "apretado" que describes.
-        SIDE_MARGIN = 0 * mm  
+        # MÁRGENES: He puesto 0 porque decías que se montaban. 
+        # Si tu papel tiene borde, cambia el 0 por la medida en mm (ej: 5 * mm)
+        SIDE_MARGIN = 0 * mm      
+        TOP_MARGIN = 0 * mm       
 
-        MARGIN = 6 * mm
-        top_margin = MARGIN / 2
+        # ESPACIADO: Si hay hueco entre etiquetas, ponlo aquí.
+        HORIZ_GAP = 0 * mm
+        VERT_GAP = 0 * mm
 
-        # Cálculos automáticos basados en el margen
-        usable_width = WIDTH - (2 * SIDE_MARGIN)
+        # Cálculos automáticos
+        usable_width = WIDTH - (2 * SIDE_MARGIN) - (HORIZ_GAP * (COLS - 1))
         LABEL_W = usable_width / COLS
-        LABEL_H = 36 * mm
+        # Calculamos el alto para que ocupen toda la página equitativamente
+        LABEL_H = (HEIGHT - (2 * TOP_MARGIN) - (VERT_GAP * (ROWS - 1))) / ROWS
+
         SELLO_SIZE = 52
-        # --- FIN DE CAMBIOS ---
+        # -------------------------------------------------------------
 
-        # Draw labels
-        for i, row in df.iterrows():
-            col = i % COLS
-            fila = (i // COLS) % ROWS
-            if i > 0 and i % (COLS * ROWS) == 0:
-                c.showPage()
+        # --- MODO CALIBRACIÓN: DIBUJAR LÍNEAS CIAN ---
+        if show_guides:
+            c.setStrokeColor(cyan)
+            c.setLineWidth(1)
+            c.setDash(3, 3) # Línea discontinua
 
-            x = SIDE_MARGIN + col * LABEL_W
-            y = HEIGHT - top_margin - ((fila + 1) * LABEL_H) + MARGIN / 2
+            # Dibujar la cuadrícula completa
+            for r in range(ROWS):
+                for col in range(COLS):
+                    x = SIDE_MARGIN + (col * (LABEL_W + HORIZ_GAP))
+                    y = HEIGHT - TOP_MARGIN - ((r + 1) * LABEL_H) - (r * VERT_GAP)
+                    c.rect(x, y, LABEL_W, LABEL_H)
 
-            # Extract data
-            nombre = str(row.get("Nombre", "")).strip()
-            empresa = str(row.get("Empresa", "")).strip()
-            direccion = str(row.get("Dirección", "")).strip()
-            cp = str(row.get("CP", "")).split(".")[0].strip()
-            ciudad = str(row.get("Ciudad", "")).strip()
-            zona = str(row.get("Zona", "")).strip()
-            producto = str(row.get("Producto", "")).split(".")[0].strip()
-            pais = str(row.get("País", "")).strip()
+            # Texto informativo
+            c.setFillColor(cyan)
+            c.setFont("Helvetica-Bold", 14)
+            c.drawCentredString(WIDTH/2, HEIGHT/2, "MODO CALIBRACIÓN: LÍNEAS CIAN DE PRUEBA")
+            c.setFont("Helvetica", 10)
+            c.drawCentredString(WIDTH/2, HEIGHT/2 - 20, f"Márgenes actuales: Lateral={SIDE_MARGIN/mm}mm, Superior={TOP_MARGIN/mm}mm")
 
-            # Format address lines
-            lineas = [nombre]
-            if empresa:
-                lineas.append(empresa)
-            lineas.append(direccion)
-            bloque_final = " ".join(part for part in [cp, ciudad, zona, producto] if part.strip())
-            lineas.append(bloque_final)
+            # Restaurar colores normales
+            c.setDash([]) 
+            c.setStrokeColor('black')
+            c.setFillColor('black')
 
-            # Filter out empty lines
-            lineas = [l for l in lineas if l and l.lower() != "nan"]
+        # --- DIBUJAR DATOS DE ETIQUETAS ---
+        if not df.empty:
+            for i, row in df.iterrows():
+                col = i % COLS
+                fila = (i // COLS) % ROWS
 
-            # Determine font size based on text length
-            max_chars = max((len(l) for l in lineas), default=0)
-            font_size = 10 if max_chars <= 35 else 9 if max_chars <= 42 else 8
-            c.setFont("Helvetica", font_size)
+                # Nueva página si se llena
+                if i > 0 and i % (COLS * ROWS) == 0:
+                    c.showPage()
+                    # Si es calibración, volver a dibujar líneas en la página nueva
+                    if show_guides:
+                        c.setStrokeColor(cyan)
+                        c.setLineWidth(1)
+                        c.setDash(3, 3)
+                        for r in range(ROWS):
+                            for cl in range(COLS):
+                                rx = SIDE_MARGIN + (cl * (LABEL_W + HORIZ_GAP))
+                                ry = HEIGHT - TOP_MARGIN - ((r + 1) * LABEL_H) - (r * VERT_GAP)
+                                c.rect(rx, ry, LABEL_W, LABEL_H)
+                        c.setDash([])
+                        c.setStrokeColor('black')
 
-            # Draw address lines
-            line_height = font_size + 1
-            offset_y = 12 * mm
+                x = SIDE_MARGIN + (col * (LABEL_W + HORIZ_GAP))
+                y = HEIGHT - TOP_MARGIN - ((fila + 1) * LABEL_H) - (fila * VERT_GAP)
 
-            for l in reversed(lineas):
-                offset_y += line_height
-                c.drawString(x + 2 * mm, y + offset_y, l)
+                # Extraer datos
+                nombre = str(row.get("Nombre", "")).strip()
+                empresa = str(row.get("Empresa", "")).strip()
+                direccion = str(row.get("Dirección", "")).strip()
+                cp = str(row.get("CP", "")).split(".")[0].strip()
+                ciudad = str(row.get("Ciudad", "")).strip()
+                zona = str(row.get("Zona", "")).strip()
+                producto = str(row.get("Producto", "")).split(".")[0].strip()
+                pais = str(row.get("País", "")).strip()
 
-            # Draw separator line and return address
-            c.setLineWidth(0.4)
-            c.line(x + 1 * mm, y + 8 * mm, x + LABEL_W - 1 * mm, y + 8 * mm)
-            c.setFont("Helvetica", 7)
-            c.drawString(x + 2 * mm, y + 4.2 * mm,
-                        "Rte: Revista Salvaje | Apdo. Correos 15024 CP 28080")
+                # Formatear líneas
+                lineas = [nombre]
+                if empresa: lineas.append(empresa)
+                lineas.append(direccion)
+                bloque_final = " ".join(part for part in [cp, ciudad, zona, producto] if part.strip())
+                lineas.append(bloque_final)
+                if pais: lineas.append(pais) # Añadir país si existe
 
-            # Draw appropriate stamp image
-            internacional = str(row.get("Internacional", "")).strip().lower() in ["true", "1", "sí", "si"]
-            sello = _intentar_cargar_sello(internacional)
-            sello_x = x + LABEL_W - SELLO_SIZE - 1
-            sello_y = y + LABEL_H - SELLO_SIZE + 4
+                lineas = [l for l in lineas if l and l.lower() != "nan"]
 
-            # Error handling for stamp images
-            try:
-                if sello:
-                    c.drawImage(sello,
-                                sello_x,
-                                sello_y,
-                                width=SELLO_SIZE,
-                                height=SELLO_SIZE,
-                                preserveAspectRatio=True,
-                                mask='auto')
-                else:
-                    # Draw placeholder rectangle
+                # Tamaño fuente dinámico
+                max_chars = max((len(l) for l in lineas), default=0)
+                font_size = 10 if max_chars <= 35 else 9 if max_chars <= 42 else 8
+                c.setFont("Helvetica", font_size)
+
+                # Dibujar texto (calculando posición desde abajo hacia arriba)
+                line_height = font_size + 2
+                text_y_base = y + 12 * mm 
+
+                for idx, l in enumerate(reversed(lineas)):
+                    c.drawString(x + 5 * mm, text_y_base + (idx * line_height), l)
+
+                # Línea separadora y remitente
+                c.setLineWidth(0.4)
+                c.line(x + 2 * mm, y + 8 * mm, x + LABEL_W - 2 * mm, y + 8 * mm)
+                c.setFont("Helvetica", 6)
+                c.drawString(x + 5 * mm, y + 5 * mm, "Rte: Revista Salvaje | Apdo. Correos 15024 CP 28080")
+
+                # Dibujar Sello
+                internacional = str(row.get("Internacional", "")).strip().lower() in ["true", "1", "sí", "si"]
+                sello = _intentar_cargar_sello(internacional)
+
+                sello_x = x + LABEL_W - SELLO_SIZE - 2
+                sello_y = y + LABEL_H - SELLO_SIZE + 2 
+
+                try:
+                    if sello:
+                        c.drawImage(sello, sello_x, sello_y, width=SELLO_SIZE, height=SELLO_SIZE, preserveAspectRatio=True, mask='auto')
+                    else:
+                        c.rect(sello_x, sello_y, SELLO_SIZE, SELLO_SIZE)
+                        c.setFont("Helvetica", 8)
+                        c.drawString(sello_x + 5, sello_y + SELLO_SIZE/2, "INT." if internacional else "NAC.")
+                except Exception:
                     c.rect(sello_x, sello_y, SELLO_SIZE, SELLO_SIZE)
-                    c.setFont("Helvetica", 8)
-                    c.drawString(sello_x + 5, sello_y + SELLO_SIZE/2, 
-                                "NACIONAL" if not internacional else "INTERNACIONAL")
-            except Exception as e:
-                logger.error(f"Error drawing stamp image: {str(e)}")
-                # Draw placeholder rectangle
-                c.rect(sello_x, sello_y, SELLO_SIZE, SELLO_SIZE)
-                c.setFont("Helvetica-Bold", 9)
-                c.drawCentredString(sello_x + SELLO_SIZE/2, sello_y + SELLO_SIZE/2, "LIBROS")
 
         c.save()
         buffer.seek(0)
@@ -234,7 +262,7 @@ def generate_address_labels():
     except Exception as e:
         logger.error(f"Error generating address labels: {str(e)}", exc_info=True)
         raise
-
+        
 @pdf_cache
 def generate_or_labels():
     """Generate OR-type labels with barcodes"""
