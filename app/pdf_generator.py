@@ -128,16 +128,25 @@ def generate_address_labels():
         buffer = BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
 
-        # Label dimensions
+        # --- INICIO DE CAMBIOS: Ajuste de dimensiones ---
         COLS, ROWS = 3, 8
         WIDTH, HEIGHT = A4
-        LABEL_H = 36 * mm
-        SIDE_MARGIN = 2 * mm
+
+        # Ajusta este valor según tu papel. 
+        # Si tus etiquetas tocan el borde del papel, pon 0.
+        # Si tienen un borde blanco a los lados, mídelo con una regla (ej: 7mm).
+        # El valor actual de 2 causa el efecto de "apretado" que describes.
+        SIDE_MARGIN = 0 * mm  
+
         MARGIN = 6 * mm
         top_margin = MARGIN / 2
-        usable_width = WIDTH - 2 * SIDE_MARGIN
+
+        # Cálculos automáticos basados en el margen
+        usable_width = WIDTH - (2 * SIDE_MARGIN)
         LABEL_W = usable_width / COLS
+        LABEL_H = 36 * mm
         SELLO_SIZE = 52
+        # --- FIN DE CAMBIOS ---
 
         # Draw labels
         for i, row in df.iterrows():
