@@ -1,92 +1,339 @@
-# app/routes.py - Routes and request handlers
+# app/pdf_generator.py - PDF generation functionality
+import pandas as pd
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.graphics.barcode import code128
 import logging
-from flask import Blueprint, render_template, request, send_file, jsonify
-from app.data_processor import process_sheet_data, save_edited_data
-from app.pdf_generator import generate_address_labels, generate_or_labels
+import functools
+import os
+import time
+from datetime import datetime, timedelta
+from flask import current_app
 
 logger = logging.getLogger(__name__)
-main_bp = Blueprint('main', __name__, url_prefix='')
 
-@main_bp.route("/", methods=["GET", "POST"])
-def index():
-    """Main route for the application"""
-    preview = None
-    if request.method == "POST":
-        url = request.form.get("sheet_url")
+# Simple caching mechanism
+_pdf_cache = {}
+_cache_timeout = 300  # 5 minutes
 
-        try:
-            # Process the spreadsheet data
-            preview = process_sheet_data(url)
-            return render_template("index.html",
-                                   success="Datos cargados correctamente",
-                                   preview=preview)
-        except Exception as e:
-            logger.error(f"Error processing sheet: {str(e)}", exc_info=True)
-            return render_template("index.html", 
-                                  error=f"Error al procesar la hoja: {str(e)}")
+def _get_from_cache(key):
+    """Get item from cache if valid"""
+    if key in _pdf_cache:
+        timestamp, data = _pdf_cache[key]
+        if time.time() - timestamp < _cache_timeout:
+            return data
+    return None
 
-    return render_template("index.html")
+def _add_to_cache(key, data):
+    """Add item to cache"""
+    _pdf_cache[key] = (time.time(), data)
 
-@main_bp.route("/editar", methods=["POST"])
-def editar():
-    """Route for editing data"""
-    datos = request.get_json().get("data", [])
-    if not datos:
-        return jsonify({"ok": False, "error": "No se recibieron datos"}), 400
-
+def _get_data_file_timestamp():
+    """Get timestamp of data file for cache invalidation"""
     try:
-        save_edited_data(datos)
-        return jsonify({"ok": True})
-    except Exception as e:
-        logger.error(f"Error saving data: {str(e)}", exc_info=True)
-        return jsonify({"ok": False, "error": str(e)})
+        data_file_path = os.path.join('app', 'data', 'datos_hoja.csv')
+        if not os.path.exists(data_file_path):
+            data_file_path = 'datos_hoja.csv'  # Fallback a la ubicación antigua
 
-@main_bp.route("/etiquetas.pdf")
-def generar_pdf():
-    """Generate address labels PDF with extended calibration"""
+        return os.path.getmtime(data_file_path)
+    except OSError:
+        logger.warning("No se encontró el archivo de datos")
+        return 0
+
+def pdf_cache(func):
+    """Decorator for caching PDF generation"""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # Include offsets and guides in cache key
+        offsets_key = f"{kwargs.get('offset_x', 0)}_{kwargs.get('offset_y', 0)}_{kwargs.get('delta_w', 0)}_{kwargs.get('delta_h', 0)}_{kwargs.get('guides', False)}"
+        cache_key = f"{func.__name__}_{_get_data_file_timestamp()}_{offsets_key}"
+        cached_data = _get_from_cache(cache_key)
+
+        if cached_data:
+            logger.info(f"Using cached PDF for {func.__name__}")
+            # Return a new BytesIO with the same content
+            buffer = BytesIO()
+            buffer.write(cached_data.getvalue())
+            buffer.seek(0)
+            return buffer
+
+        # Generate new PDF
+        buffer = func(*args, **kwargs)
+
+        # Cache a copy
+        buffer_copy = BytesIO()
+        buffer_copy.write(buffer.getvalue())
+        buffer_copy.seek(0)
+        _add_to_cache(cache_key, buffer_copy)
+
+        return buffer
+    return wrapper
+
+def _intentar_cargar_sello(internacional=False):
+    """Try to load stamp image from static files"""
+    sello_file = "sello_extranjero.png" if internacional else "sello_nacional.png"
+
+    rutas = [
+        os.path.join('app', 'static', 'sellos', sello_file),
+        os.path.join('static', 'sellos', sello_file),
+        os.path.join('sellos', sello_file),
+        os.path.join('/tmp', 'sellos', sello_file)
+    ]
+
+    for ruta in rutas:
+        if os.path.exists(ruta):
+            logger.info(f"Sello encontrado en: {ruta}")
+            return ruta
+
+    logger.warning(f"No se encontró el archivo de sello: {sello_file}")
+    return None
+
+def _read_data_file():
+    """Read data from CSV file handling different locations"""
+    posibles_rutas = [
+        os.path.join('app', 'data', 'datos_hoja.csv'),
+        'datos_hoja.csv'
+    ]
+
+    for ruta in posibles_rutas:
+        if os.path.exists(ruta):
+            logger.info(f"Leyendo datos desde: {ruta}")
+            return pd.read_csv(ruta, encoding="utf-8-sig", dtype=str).fillna("")
+
+    raise FileNotFoundError("No se encontró el archivo datos_hoja.csv")
+
+def _dibujar_guias(c, x, y, w, h):
+    """
+    Dibuja las guías visuales (simulando los cortes de la hoja).
+    """
+    c.saveState()
+    # Borde Cian (Corte físico de la etiqueta)
+    c.setStrokeColorCMYK(1, 0, 0, 0) # Cian puro
+    c.setLineWidth(0.5)
+    c.setDash(6, 3) 
+    c.rect(x, y, w, h)
+
+    # Referencia central (Rojo tenue)
+    c.setStrokeColorCMYK(0, 1, 1, 0) # Rojo
+    c.setLineWidth(0.2)
+    center_x = x + w/2
+    center_y = y + h/2
+    cross_size = 3 * mm
+    c.line(center_x - cross_size, center_y, center_x + cross_size, center_y)
+    c.line(center_x, center_y - cross_size, center_x, center_y + cross_size)
+    c.restoreState()
+
+@pdf_cache
+def generate_address_labels(offset_x=0, offset_y=0, delta_w=0, delta_h=0, guides=False):
+    """
+    Generate address labels PDF.
+    offset_x/y: Mueve todo el contenido (calibración impresora).
+    delta_w/h: Aumenta el margen interno (padding), encogiendo el contenido.
+    guides: Dibuja la rejilla teórica fija.
+    """
     try:
-        offset_x = float(request.args.get("offset_x", 0))
-        offset_y = float(request.args.get("offset_y", 0))
-        delta_w = float(request.args.get("delta_w", 0))
-        delta_h = float(request.args.get("delta_h", 0))
-        guides = request.args.get("guides", "0") == "1"
+        df = _read_data_file()
+        df = df[df["Enviar"].astype(str).str.lower().isin(["true", "1", "sí", "si"])
+                & df["Nombre"].fillna("").str.strip().ne("")
+                & df["Dirección"].fillna("").str.strip().ne("")
+                & df["Ciudad"].fillna("").str.strip().ne("")].reset_index(drop=True)
 
-        buffer = generate_address_labels(
-            offset_x=offset_x, 
-            offset_y=offset_y,
-            delta_w=delta_w,
-            delta_h=delta_h,
-            guides=guides
-        )
-        return send_file(buffer,
-                         mimetype="application/pdf",
-                         as_attachment=False,
-                         download_name="etiquetas.pdf")
+        if df.empty:
+            buffer = BytesIO()
+            c = canvas.Canvas(buffer, pagesize=A4)
+            c.drawString(50, 800, "No hay datos válidos para generar etiquetas")
+            c.save()
+            buffer.seek(0)
+            return buffer
+
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+
+        # Label dimensions
+        COLS, ROWS = 3, 8
+        WIDTH, HEIGHT = A4
+        LABEL_H = 36 * mm
+        SIDE_MARGIN = 2 * mm
+        MARGIN = 6 * mm
+        top_margin = MARGIN / 2
+        LABEL_W = (WIDTH - 2 * SIDE_MARGIN) / COLS
+        SELLO_SIZE = 52
+
+        # Conversión a puntos
+        u_off_x = offset_x * mm
+        u_off_y = offset_y * mm
+        u_pad_x = delta_w * mm  # Padding Horizontal
+        u_pad_y = delta_h * mm  # Padding Vertical
+
+        for i, row in df.iterrows():
+            col = i % COLS
+            fila = (i // COLS) % ROWS
+            if i > 0 and i % (COLS * ROWS) == 0:
+                c.showPage()
+
+            # 1. Coordenadas de la celda FÍSICA (Inmutables para las guías)
+            static_x = SIDE_MARGIN + col * LABEL_W
+            static_y = HEIGHT - top_margin - ((fila + 1) * LABEL_H)
+
+            if guides:
+                _dibujar_guias(c, static_x, static_y, LABEL_W, LABEL_H)
+
+            # 2. Coordenadas de CONTENIDO (Aplicando Offset y Padding)
+            base_x = static_x + u_off_x
+            base_y = static_y + u_off_y
+
+            # Área útil efectiva tras aplicar Padding
+            text_x = base_x + 2*mm + u_pad_x 
+            sello_x = base_x + LABEL_W - SELLO_SIZE - 1 - u_pad_x
+
+            text_base_y = base_y + MARGIN/2 + u_pad_y
+            sello_y = base_y + LABEL_H - SELLO_SIZE + 4 - u_pad_y
+
+            # Extract Data
+            nombre = str(row.get("Nombre", "")).strip()
+            empresa = str(row.get("Empresa", "")).strip()
+            direccion = str(row.get("Dirección", "")).strip()
+            cp = str(row.get("CP", "")).strip()
+            ciudad = str(row.get("Ciudad", "")).strip()
+            zona = str(row.get("Zona", "")).strip()
+            producto = str(row.get("Producto", "")).split(".")[0].strip()
+            # pais = str(row.get("País", "")).strip()
+
+            lineas = [nombre]
+            if empresa: lineas.append(empresa)
+            lineas.append(direccion)
+            bloque_final = " ".join(part for part in [cp, ciudad, zona, producto] if part.strip())
+            lineas.append(bloque_final)
+            lineas = [l for l in lineas if l and l.lower() != "nan"]
+
+            # Font size
+            max_chars = max((len(l) for l in lineas), default=0)
+            font_size = 10 if max_chars <= 35 else 9 if max_chars <= 42 else 8
+            c.setFont("Helvetica", font_size)
+
+            # Draw Text
+            line_height = font_size + 1
+            curr_y = text_base_y + 12 * mm 
+
+            for l in reversed(lineas):
+                curr_y += line_height
+                c.drawString(text_x, curr_y, l)
+
+            # Separator Line
+            c.setLineWidth(0.4)
+            line_start = base_x + 1*mm + u_pad_x
+            line_end = base_x + LABEL_W - 1*mm - u_pad_x
+            c.line(line_start, text_base_y + 8*mm, line_end, text_base_y + 8*mm)
+
+            # Return Address
+            c.setFont("Helvetica", 7)
+            c.drawString(text_x, text_base_y + 4.2*mm, "Rte: Revista Salvaje | Apdo. Correos 15024 CP 28080")
+
+            # Stamp
+            internacional = str(row.get("Internacional", "")).strip().lower() in ["true", "1", "sí", "si"]
+            sello = _intentar_cargar_sello(internacional)
+
+            try:
+                if sello:
+                    c.drawImage(sello, sello_x, sello_y, width=SELLO_SIZE, height=SELLO_SIZE, preserveAspectRatio=True, mask='auto')
+                else:
+                    c.rect(sello_x, sello_y, SELLO_SIZE, SELLO_SIZE)
+                    c.setFont("Helvetica", 8)
+                    c.drawString(sello_x + 5, sello_y + SELLO_SIZE/2, "NACIONAL" if not internacional else "INTERNACIONAL")
+            except Exception as e:
+                logger.error(f"Error drawing stamp: {e}")
+                c.rect(sello_x, sello_y, SELLO_SIZE, SELLO_SIZE)
+
+        c.save()
+        buffer.seek(0)
+        return buffer
     except Exception as e:
-        logger.error(f"Error generating PDF: {str(e)}", exc_info=True)
-        return f"Error al generar PDF: {str(e)}", 500
+        logger.error(f"Error generating labels: {str(e)}", exc_info=True)
+        raise
 
-@main_bp.route("/etiquetas_or.pdf")
-def generar_etiquetas_or():
-    """Generate OR labels PDF with extended calibration"""
+@pdf_cache
+def generate_or_labels():
+    """
+    Generate OR labels.
+    - Excludes international shipments.
+    - Standard layout (NO dynamic calibration).
+    """
     try:
-        offset_x = float(request.args.get("offset_x", 0))
-        offset_y = float(request.args.get("offset_y", 0))
-        delta_w = float(request.args.get("delta_w", 0))
-        delta_h = float(request.args.get("delta_h", 0))
-        guides = request.args.get("guides", "0") == "1"
+        df = _read_data_file()
 
-        buffer = generate_or_labels(
-            offset_x=offset_x, 
-            offset_y=offset_y,
-            delta_w=delta_w,
-            delta_h=delta_h,
-            guides=guides
-        )
-        return send_file(buffer,
-                         mimetype="application/pdf",
-                         as_attachment=False,
-                         download_name="etiquetas_or.pdf")
+        # 1. Filtros básicos
+        df = df[df["Enviar"].astype(str).str.lower().isin(["true", "1", "sí", "si"])]
+        df = df[(df["Nombre"].str.strip() != "") & (df["Dirección"].str.strip() != "") & (df["Ciudad"].str.strip() != "")]
+
+        # 2. Excluir Internacionales
+        df = df[~df["Internacional"].astype(str).str.lower().isin(["true", "1", "sí", "si"])]
+
+        if df.empty:
+            logger.warning("No hay datos para etiquetas OR")
+            buffer = BytesIO()
+            c = canvas.Canvas(buffer, pagesize=A4)
+            c.drawString(50, 800, "No hay envíos NACIONALES para etiquetas OR")
+            c.save()
+            buffer.seek(0)
+            return buffer
+
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+
+        COLS, ROWS = 2, 5
+        WIDTH, HEIGHT = A4
+        LABEL_W = WIDTH / COLS
+        LABEL_H = HEIGHT / ROWS
+        MARGIN = 6 * mm
+
+        id_base = 921
+        etiquetas = []
+        for i, (_, row) in enumerate(df.iterrows()):
+            cp = str(row["CP"]).strip().zfill(5)
+            id_envio = str(id_base + i).zfill(9)
+            codigo = f"OR6BNA93{id_envio}{cp}X"
+            etiquetas.append((cp, codigo))
+
+        for i, (cp, codigo) in enumerate(etiquetas):
+            col = i % COLS
+            fila = (i // COLS) % ROWS
+            if i > 0 and i % (COLS * ROWS) == 0:
+                c.showPage()
+
+            x = col * LABEL_W + MARGIN / 2
+            y = HEIGHT - ((fila + 1) * LABEL_H) + MARGIN / 2
+            w = LABEL_W - MARGIN
+            h = LABEL_H - MARGIN
+
+            # Borde
+            c.setLineWidth(1)
+            c.rect(x, y, w, h)
+
+            # Header
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(x + 10, y + h - 24, "Libros (Ordinario)")
+            c.drawRightString(x + w - 10, y + h - 24, f"CP {cp}")
+
+            # Barcode
+            try:
+                barcode = code128.Code128(codigo, barHeight=h - 70, barWidth=1)
+                bw, bh = barcode.wrapOn(c, w - 16, h)
+                barcode.drawOn(c, x + 8, y + 36)
+            except Exception as e:
+                logger.error(f"Error barcode: {e}")
+                c.rect(x + 8, y + 36, w - 16, h - 70)
+                c.setFont("Helvetica", 8)
+                c.drawCentredString(x + w/2, y + 36 + (h-70)/2, "ERR")
+
+            # Tracking Code
+            c.setFont("Helvetica-Bold", 12)
+            c.drawCentredString(x + w / 2, y + 18, codigo)
+
+        c.save()
+        buffer.seek(0)
+        return buffer
     except Exception as e:
-        logger.error(f"Error generating OR labels: {str(e)}", exc_info=True)
-        return f"Error al generar etiquetas OR: {str(e)}", 500
+        logger.error(f"Error OR labels: {str(e)}", exc_info=True)
+        raise

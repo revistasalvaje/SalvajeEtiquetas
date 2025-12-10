@@ -102,7 +102,10 @@
 
             <div class="calibration-panel">
                 <h3>Ajustes de Impresión (Calibración)</h3>
-                <p class="small-text">Los cambios se aplican en tiempo real.</p>
+                <p class="small-text">
+                    <strong>Nota:</strong> Estos ajustes se guardan automáticamente y 
+                    <u>solo aplican a las Etiquetas de Dirección</u>. Las etiquetas OR son fijas.
+                </p>
                 <div class="calibration-controls">
                     <div class="control-group">
                         <label for="offset-x">Desplazar X (mm):</label>
@@ -146,7 +149,7 @@
     </div>
 
     <script>
-    // Variables para ordenación
+    // --- Lógica de Ordenación de Tablas ---
     let sortDirection = {}; 
 
     function sortTable(n) {
@@ -192,11 +195,46 @@
         }
     }
 
-    // Debounce para no recargar el iframe a cada tecla
+    // --- Persistencia de Ajustes (LocalStorage) ---
+    function saveSettings() {
+        const settings = {
+            offsetX: document.getElementById('offset-x').value,
+            offsetY: document.getElementById('offset-y').value,
+            deltaW: document.getElementById('delta-w').value,
+            deltaH: document.getElementById('delta-h').value,
+            guides: document.getElementById('show-guides').checked
+        };
+        localStorage.setItem('salvaje_settings', JSON.stringify(settings));
+    }
+
+    function loadSettings() {
+        const saved = localStorage.getItem('salvaje_settings');
+        if (saved) {
+            try {
+                const settings = JSON.parse(saved);
+                if(document.getElementById('offset-x')) {
+                    document.getElementById('offset-x').value = settings.offsetX || 0;
+                    document.getElementById('offset-y').value = settings.offsetY || 0;
+                    document.getElementById('delta-w').value = settings.deltaW || 0;
+                    document.getElementById('delta-h').value = settings.deltaH || 0;
+                    document.getElementById('show-guides').checked = settings.guides || false;
+                    // Forzar actualización inicial
+                    updateLinks();
+                }
+            } catch (e) {
+                console.error("Error cargando ajustes", e);
+            }
+        }
+    }
+
+    // --- Actualización de PDF ---
     let timeout = null;
     function debouncedUpdate() {
         clearTimeout(timeout);
-        timeout = setTimeout(updateLinks, 500); // Espera 500ms tras dejar de escribir
+        timeout = setTimeout(() => {
+            saveSettings(); // Guardar al dejar de escribir
+            updateLinks();
+        }, 500);
     }
 
     function updateLinks() {
@@ -206,28 +244,39 @@
         const deltaH = document.getElementById('delta-h').value;
         const guides = document.getElementById('show-guides').checked ? "1" : "0";
 
+        // Guardar checkbox también si cambia
+        if(timeout === null) saveSettings();
+
+        // Parámetros SOLO para direcciones
         const query = `?offset_x=${offX}&offset_y=${offY}&delta_w=${deltaW}&delta_h=${deltaH}&guides=${guides}`;
         const timeParam = '&t=' + new Date().getTime();
 
         const iframe = document.getElementById('pdf-preview');
-        if(iframe) {
-            // Detectamos si estamos viendo OR o Dirección por la URL actual del iframe
-            let currentSrc = iframe.src;
-            let basePath = currentSrc.split('?')[0]; 
-            // Si la URL estaba vacía o es la primera carga, usaremos la default (dirección)
-            if (basePath.endsWith('/')) basePath = "{{ url_for('main.generar_pdf') }}";
+        const btnAddr = document.getElementById('btn-download-addr');
+        const btnOr = document.getElementById('btn-download-or');
 
-            iframe.src = basePath + query + timeParam;
+        // Actualizar IFRAME (Solo si está mostrando etiquetas de dirección)
+        // Si el usuario navegó manualmente a OR en el iframe, no queremos cambiarlo automágicamente
+        if(iframe) {
+            let currentSrc = iframe.src;
+            // Si es la carga inicial o es el PDF de etiquetas
+            if (currentSrc.includes('etiquetas.pdf') || !currentSrc.includes('.pdf')) {
+                iframe.src = "{{ url_for('main.generar_pdf') }}" + query + timeParam;
+            }
         }
 
-        const btnAddr = document.getElementById('btn-download-addr');
+        // El botón de direcciones lleva los ajustes
         if(btnAddr) btnAddr.href = "{{ url_for('main.generar_pdf') }}" + query;
 
-        const btnOr = document.getElementById('btn-download-or');
-        if(btnOr) btnOr.href = "{{ url_for('main.generar_etiquetas_or') }}" + query;
+        // El botón OR va LIMPIO (sin ajustes)
+        if(btnOr) btnOr.href = "{{ url_for('main.generar_etiquetas_or') }}" + "?t=" + new Date().getTime();
     }
 
+    // --- Inicialización ---
     document.addEventListener('DOMContentLoaded', function() {
+        // Cargar ajustes guardados
+        loadSettings();
+
         const editarForm = document.getElementById('editar-form');
         const loading = document.getElementById('loading');
         const statusMessage = document.getElementById('status-message');
