@@ -44,23 +44,23 @@
         {% if preview %}
         <section class="data-section">
             <h2>Editar datos antes de generar etiquetas</h2>
-            <p class="instructions">Revisa y edita los datos antes de imprimir las etiquetas.</p>
+            <p class="instructions">Pulsa en los encabezados para ordenar. Revisa y edita los datos antes de imprimir.</p>
 
             <form id="editar-form">
                 <div class="table-container">
-                    <table class="editable">
+                    <table class="editable" id="dataTable">
                         <thead>
                             <tr>
-                                <th>¿Env?</th>
-                                <th>Nombre</th>
-                                <th>Empresa</th>
-                                <th>Dirección</th>
-                                <th>CP</th>
-                                <th>Ciudad</th>
-                                <th>Z</th>
-                                <th>Env.</th>
-                                <th>País</th>
-                                <th>¿Int?</th>
+                                <th onclick="sortTable(0)">¿Env? <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(1)">Nombre <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(2)">Empresa <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(3)">Dirección <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(4)">CP <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(5)">Ciudad <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(6)">Z <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(7)">Env. <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(8)">País <span class="sort-icon">⇅</span></th>
+                                <th onclick="sortTable(9)">¿Int? <span class="sort-icon">⇅</span></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -84,7 +84,6 @@
 
                 <div class="button-group">
                     <button type="submit" id="save-btn" class="primary">Guardar y regenerar PDF</button>
-                    <button type="button" id="or-btn" class="secondary">Generar etiquetas OR</button>
                 </div>
             </form>
 
@@ -99,21 +98,121 @@
 
         {% if success %}
         <section class="preview-section">
-            <h2>Previsualización de etiquetas</h2>
+            <h2>Previsualización y Descarga</h2>
+            
+            <div class="calibration-panel">
+                <h3>Ajustes de Impresión (Calibración)</h3>
+                <p class="small-text">Mueve el contenido si las etiquetas no encajan bien en tu papel.</p>
+                <div class="calibration-controls">
+                    <div class="control-group">
+                        <label for="offset-x">↔ Horizontal (mm):</label>
+                        <input type="number" id="offset-x" value="0" step="0.5" onchange="updateLinks()">
+                        <span class="hint">Positivo = Derecha</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="offset-y">↕ Vertical (mm):</label>
+                        <input type="number" id="offset-y" value="0" step="0.5" onchange="updateLinks()">
+                        <span class="hint">Positivo = Arriba</span>
+                    </div>
+                    <button type="button" class="button secondary small" onclick="updateLinks()">Aplicar a Vista Previa</button>
+                </div>
+            </div>
+
             <div class="pdf-container">
                 <iframe id="pdf-preview" src="{{ url_for('main.generar_pdf') }}" width="100%" height="600px"></iframe>
             </div>
-            <div class="button-group">
-                <a href="{{ url_for('main.generar_pdf') }}" class="button download" download="etiquetas.pdf">Descargar PDF</a>
+            
+            <div class="button-group downloads">
+                <a href="{{ url_for('main.generar_pdf') }}" id="btn-download-addr" class="button download" download="etiquetas.pdf">Descargar Etiquetas Dirección</a>
+                <a href="{{ url_for('main.generar_etiquetas_or') }}" id="btn-download-or" class="button download secondary" download="etiquetas_or.pdf">Descargar Etiquetas OR</a>
             </div>
         </section>
         {% endif %}
     </div>
 
     <script>
+    // Variables para ordenación
+    let sortDirection = {}; 
+
+    function sortTable(n) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById("dataTable");
+        switching = true;
+        
+        // Set sort direction
+        if (!sortDirection[n] || sortDirection[n] === 'desc') {
+            dir = "asc";
+            sortDirection[n] = 'asc';
+        } else {
+            dir = "desc";
+            sortDirection[n] = 'desc';
+        }
+
+        while (switching) {
+            switching = false;
+            rows = table.rows;
+            
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                
+                // Get input elements
+                var xInput = rows[i].getElementsByTagName("TD")[n].querySelector('input');
+                var yInput = rows[i + 1].getElementsByTagName("TD")[n].querySelector('input');
+                
+                // Get values based on input type
+                if (xInput.type === "checkbox") {
+                    x = xInput.checked ? "1" : "0";
+                    y = yInput.checked ? "1" : "0";
+                } else {
+                    x = xInput.value.toLowerCase();
+                    y = yInput.value.toLowerCase();
+                }
+
+                if (dir == "asc") {
+                    if (x > y) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                } else if (dir == "desc") {
+                    if (x < y) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount++;
+            }
+        }
+    }
+
+    // Función para actualizar enlaces y preview con offsets
+    function updateLinks() {
+        const offX = document.getElementById('offset-x').value;
+        const offY = document.getElementById('offset-y').value;
+        const query = `?offset_x=${offX}&offset_y=${offY}`;
+        const timeParam = '&t=' + new Date().getTime(); // Prevent caching
+
+        // Actualizar iframe
+        const iframe = document.getElementById('pdf-preview');
+        if(iframe) {
+            // Mantener la ruta base actual (dirección u OR) pero cambiando params
+            let currentBase = iframe.src.split('?')[0];
+            iframe.src = currentBase + query + timeParam;
+        }
+
+        // Actualizar botones de descarga
+        const btnAddr = document.getElementById('btn-download-addr');
+        if(btnAddr) btnAddr.href = "{{ url_for('main.generar_pdf') }}" + query;
+
+        const btnOr = document.getElementById('btn-download-or');
+        if(btnOr) btnOr.href = "{{ url_for('main.generar_etiquetas_or') }}" + query;
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const editarForm = document.getElementById('editar-form');
-        const orBtn = document.getElementById('or-btn');
         const loading = document.getElementById('loading');
         const statusMessage = document.getElementById('status-message');
         const sheetsForm = document.getElementById('sheets-form');
@@ -134,14 +233,10 @@
                 loading.style.display = 'flex';
                 document.getElementById('save-btn').disabled = true;
 
-                // Collect form data - crucial part
+                // Collect form data
                 const rows = Array.from(document.querySelectorAll('tbody tr'));
                 const data = rows.map(row => {
-                    // Get all inputs in this row
                     const inputs = row.querySelectorAll('input');
-
-                    // Create an object with the required field names
-                    // Important: Use the backend field names, not display names
                     return {
                         "Enviar": inputs[0].checked,
                         "Nombre": inputs[1].value.trim(),
@@ -159,9 +254,7 @@
                 // Send data to server
                 fetch('/editar', {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ data: data })
                 })
                 .then(res => res.json())
@@ -170,23 +263,12 @@
                     document.getElementById('save-btn').disabled = false;
 
                     if (data.ok) {
-                        // Refresh PDF preview
-                        const iframe = document.getElementById('pdf-preview');
-                        if (iframe) {
-                            iframe.src = '{{ url_for("main.generar_pdf") }}?' + new Date().getTime();
-                        }
-
-                        // Show success message
+                        updateLinks(); // Refresh PDF preview with current offsets
                         statusMessage.textContent = 'Datos guardados correctamente';
                         statusMessage.className = 'alert success';
                         statusMessage.style.display = 'block';
-
-                        // Hide message after 3 seconds
-                        setTimeout(() => {
-                            statusMessage.style.display = 'none';
-                        }, 3000);
+                        setTimeout(() => { statusMessage.style.display = 'none'; }, 3000);
                     } else {
-                        // Show error message
                         statusMessage.textContent = data.error || 'Error al guardar los datos';
                         statusMessage.className = 'alert error';
                         statusMessage.style.display = 'block';
@@ -196,18 +278,10 @@
                     console.error('Error:', error);
                     loading.style.display = 'none';
                     document.getElementById('save-btn').disabled = false;
-
                     statusMessage.textContent = 'Error de conexión';
                     statusMessage.className = 'alert error';
                     statusMessage.style.display = 'block';
                 });
-            });
-        }
-
-        if (orBtn) {
-            orBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                window.open('{{ url_for("main.generar_etiquetas_or") }}', '_blank');
             });
         }
     });

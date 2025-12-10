@@ -79,7 +79,7 @@ label {
   gap: 0.5rem;
 }
 
-input[type="text"] {
+input[type="text"], input[type="number"] {
   display: block;
   padding: 0.6rem;
   font-size: 1rem;
@@ -89,7 +89,7 @@ input[type="text"] {
   min-width: 0;
 }
 
-input[type="text"]:focus {
+input[type="text"]:focus, input[type="number"]:focus {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
@@ -98,6 +98,52 @@ input[type="text"]:focus {
 input[type="checkbox"] {
   width: 1.2rem;
   height: 1.2rem;
+}
+
+/* Calibration Panel */
+.calibration-panel {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-radius: 6px;
+}
+
+.calibration-panel h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.calibration-controls {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    width: 150px;
+}
+
+.control-group label {
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+}
+
+.control-group .hint {
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 0.2rem;
+}
+
+.small-text {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 1rem;
+    margin-top: 0;
 }
 
 /* Buttons */
@@ -135,6 +181,11 @@ button.secondary, .button.secondary {
 
 button.secondary:hover:not(:disabled), .button.secondary:hover {
   background: #5a6268;
+}
+
+button.small, .button.small {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
 }
 
 button:active:not(:disabled), .button:active {
@@ -227,6 +278,18 @@ button:active:not(:disabled), .button:active {
   position: sticky;
   top: 0;
   font-weight: 600;
+  cursor: pointer; /* Cursor de mano para ordenar */
+  user-select: none;
+}
+
+.editable th:hover {
+    background-color: #e2e6ea;
+}
+
+.sort-icon {
+    font-size: 0.8em;
+    margin-left: 5px;
+    opacity: 0.5;
 }
 
 .editable tbody tr:nth-child(even) {
@@ -306,11 +369,11 @@ iframe {
     flex-direction: column;
   }
 
-  .button-group {
+  .button-group, .calibration-controls {
     flex-direction: column;
   }
 
-  button, .button {
+  button, .button, .control-group {
     width: 100%;
   }
 
