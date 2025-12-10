@@ -1,16 +1,21 @@
 Enviar,Nombre,Empresa,Dirección,CP,Ciudad,Zona,Producto,País,Internacional
-False,Ana Escario,,Avda. de la Paz 31,22004,Huesca,A,,,True
-False,Víctor Martínez Martínez,,"Avenida De La Paz 3, Esc Izq. 6A",09004,Burgos,B,,,True
-False,Paloma Vega Escarpa,,"C/ Cigarral 2, 3ºA",49002,Zamora,A,20+23,,False
-False,Mara Gonçalves,,Rua Salgueiro Maia 17 r/c esq.,8600,Lagos,B,22+23+24,,False
-True,Laura Sanjuan López,Juzgado de lo Mercantil nº 1,"C/ Málaga 2, torre 2, planta 8",35001,Las Palmas de G.C.,A,23,,True
-True,Regina Touceda Rey,,A Palma 17,36670,Cuntis,B,23+24,,False
-True,Javier Vega Sánchez,,"C/ Fco. Jiménez Lomas 4, blq. 3, 5ºA",29004,Málaga,A,24,,False
-True,Fernando Taranco Delgado,,"C/ Princesa 75, 7º int. izq.",28008,Madrid,A,24,,False
-True,José Barbado,Franela,C/ Juan Mambrilla 3,47003,Valladolid,A,24,,False
-True,Monica Parga,,"C/ Limón 34, 2ºG",28015,Madrid,A,24,,False
-True,Hector Ariño Farnos,,"C/ El Sol 4, 1ºB",50013,Zaragoza,A,24,,False
-True,Jessica Ferrer Escandell,,"C/ Bisbe Abad y Lasierra 11, 3º B",07800,Eivissa,A,24,,False
-True,Ignacio Gomez Aparicio,,Avda. Marques de Valdecilla 38A,39110,Soto de la Marina,B,24,,False
-True,Felipe Marín Malo,,"Pza. España 5, 2ºC",31340,Marcilla,B,24,,False
-True,Adrián Martínez Cardenete,,"Avda. La Pau 28, A",43580,Deltebre,B,24,,False
+False,José Fco. Esperón Rodríguez,,"C/ Ofelia Nieto 11, 4º izq.",28039,Madrid,300,,,False
+False,Javi Sánchez,,"Rda. de Atocha 12, 1A",28012,Madrid,330,,,False
+False,Amparo Mateo Antón,,"C/ Llull 25, entlo. 1",08005,Barcelona,330,,,False
+False,Sergi Hernando Sánchez,,C/ Mossèn Esteve Verdaguer 9A,08180,Moià,330,,,False
+False,Unai Bilbao Vélez,,Gandia Errepidea 13,48630,Gorliz,330,,,False
+False,Toni Vílchez,,"C/ Rauda, 8, 3ºB",18008,Granada,900,,,False
+False,Isabel Inés Casasnovas,"Buenas tarde,","Avda. Reina Victoria 15D, 12A esc. dcha.",28003,Madrid,A,26,,False
+False,Óscar Samperio Gómez,,"C/ Juan de la Cosa 29, 1B",39004,Santander,330,Correos 4-10 días1.65,,False
+False,Miriam Blanco Moral,,"C/ Ferrocarril 18, bajo",47004,Valladolid,330,Correos 4-10 días1.65,,False
+False,Beatriz Rodríguez Rodríguez,,C/ Segovia 24,28880,Meco,900,Correos 4-10 días2.89,,False
+False,Laia Ahumada Batlle,,Diss. Esquerra del Fluvià,17177,Hostalets d'en Bas,,Correos 4-10 días3.31,,False
+False,Sandra Morante,,"C/ Sant Cosme 79, 1-2",08222,Terrassa,900,Correos 4-10 días3.31,,False
+False,Fco. José Navarro Díaz,,"C/ Cuarzo, 1º B",41009,Sevilla,900,Correos 4-10 días3.31,,False
+False,Irene Cubells García,,"C/ d'Àngel Guimerà 68, 11",46008,València,900,Correos 4-10 días3.31,,False
+False,Jaime Garate Marquerie,,"C/ Padre Oltra 81, 2º",28019,Madrid,900,Correos 4-10 días3.31,,False
+False,Rubén Peinado Tomás,,C/ d'Orient 78A,07110,Bunyola,900,Correos 4-10 días3.31,,False
+True,Denis Conde Robledo,,C/ San Andrés 18,38588,Arico,900,Correos 4-10 días3.31,,False
+True,Fuensanta Martin Garrido,,"C/ Virgen del Rosario 4, 2B",28220,Majadahonda,,Envío gratuito00,,False
+True,Javier Ruiz Alcocer,,C/ Arcos de Jalón 118,28037,Madrid,330,Envío gratuito00,,True
+True,Oriol Gamissans Marcé,Animal Sapiens,Pla de Salt 12-14,17190,Salt,900,Envío gratuito00,,True

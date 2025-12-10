@@ -99,29 +99,44 @@
         {% if success %}
         <section class="preview-section">
             <h2>Previsualización y Descarga</h2>
-            
+
             <div class="calibration-panel">
                 <h3>Ajustes de Impresión (Calibración)</h3>
-                <p class="small-text">Mueve el contenido si las etiquetas no encajan bien en tu papel.</p>
+                <p class="small-text">Los cambios se aplican en tiempo real.</p>
                 <div class="calibration-controls">
                     <div class="control-group">
-                        <label for="offset-x">↔ Horizontal (mm):</label>
-                        <input type="number" id="offset-x" value="0" step="0.5" onchange="updateLinks()">
-                        <span class="hint">Positivo = Derecha</span>
+                        <label for="offset-x">Desplazar X (mm):</label>
+                        <input type="number" id="offset-x" value="0" step="0.5" oninput="debouncedUpdate()">
+                        <span class="hint">+ Der / - Izq</span>
                     </div>
                     <div class="control-group">
-                        <label for="offset-y">↕ Vertical (mm):</label>
-                        <input type="number" id="offset-y" value="0" step="0.5" onchange="updateLinks()">
-                        <span class="hint">Positivo = Arriba</span>
+                        <label for="offset-y">Desplazar Y (mm):</label>
+                        <input type="number" id="offset-y" value="0" step="0.5" oninput="debouncedUpdate()">
+                        <span class="hint">+ Arr / - Abj</span>
                     </div>
-                    <button type="button" class="button secondary small" onclick="updateLinks()">Aplicar a Vista Previa</button>
+                    <div class="control-group">
+                        <label for="delta-w">Margen Lateral (mm):</label>
+                        <input type="number" id="delta-w" value="0" step="0.1" oninput="debouncedUpdate()">
+                        <span class="hint">Encoger ancho</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="delta-h">Margen Vertical (mm):</label>
+                        <input type="number" id="delta-h" value="0" step="0.1" oninput="debouncedUpdate()">
+                        <span class="hint">Encoger alto</span>
+                    </div>
+                    <div class="control-group" style="width: auto; align-self: center;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="show-guides" onchange="updateLinks()">
+                            <label for="show-guides" style="margin: 0; cursor: pointer;"><strong>Ver Guías (Cortes)</strong></label>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div class="pdf-container">
                 <iframe id="pdf-preview" src="{{ url_for('main.generar_pdf') }}" width="100%" height="600px"></iframe>
             </div>
-            
+
             <div class="button-group downloads">
                 <a href="{{ url_for('main.generar_pdf') }}" id="btn-download-addr" class="button download" download="etiquetas.pdf">Descargar Etiquetas Dirección</a>
                 <a href="{{ url_for('main.generar_etiquetas_or') }}" id="btn-download-or" class="button download secondary" download="etiquetas_or.pdf">Descargar Etiquetas OR</a>
@@ -138,8 +153,7 @@
         var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
         table = document.getElementById("dataTable");
         switching = true;
-        
-        // Set sort direction
+
         if (!sortDirection[n] || sortDirection[n] === 'desc') {
             dir = "asc";
             sortDirection[n] = 'asc';
@@ -151,15 +165,11 @@
         while (switching) {
             switching = false;
             rows = table.rows;
-            
             for (i = 1; i < (rows.length - 1); i++) {
                 shouldSwitch = false;
-                
-                // Get input elements
                 var xInput = rows[i].getElementsByTagName("TD")[n].querySelector('input');
                 var yInput = rows[i + 1].getElementsByTagName("TD")[n].querySelector('input');
-                
-                // Get values based on input type
+
                 if (xInput.type === "checkbox") {
                     x = xInput.checked ? "1" : "0";
                     y = yInput.checked ? "1" : "0";
@@ -169,15 +179,9 @@
                 }
 
                 if (dir == "asc") {
-                    if (x > y) {
-                        shouldSwitch = true;
-                        break;
-                    }
+                    if (x > y) { shouldSwitch = true; break; }
                 } else if (dir == "desc") {
-                    if (x < y) {
-                        shouldSwitch = true;
-                        break;
-                    }
+                    if (x < y) { shouldSwitch = true; break; }
                 }
             }
             if (shouldSwitch) {
@@ -188,22 +192,34 @@
         }
     }
 
-    // Función para actualizar enlaces y preview con offsets
+    // Debounce para no recargar el iframe a cada tecla
+    let timeout = null;
+    function debouncedUpdate() {
+        clearTimeout(timeout);
+        timeout = setTimeout(updateLinks, 500); // Espera 500ms tras dejar de escribir
+    }
+
     function updateLinks() {
         const offX = document.getElementById('offset-x').value;
         const offY = document.getElementById('offset-y').value;
-        const query = `?offset_x=${offX}&offset_y=${offY}`;
-        const timeParam = '&t=' + new Date().getTime(); // Prevent caching
+        const deltaW = document.getElementById('delta-w').value;
+        const deltaH = document.getElementById('delta-h').value;
+        const guides = document.getElementById('show-guides').checked ? "1" : "0";
 
-        // Actualizar iframe
+        const query = `?offset_x=${offX}&offset_y=${offY}&delta_w=${deltaW}&delta_h=${deltaH}&guides=${guides}`;
+        const timeParam = '&t=' + new Date().getTime();
+
         const iframe = document.getElementById('pdf-preview');
         if(iframe) {
-            // Mantener la ruta base actual (dirección u OR) pero cambiando params
-            let currentBase = iframe.src.split('?')[0];
-            iframe.src = currentBase + query + timeParam;
+            // Detectamos si estamos viendo OR o Dirección por la URL actual del iframe
+            let currentSrc = iframe.src;
+            let basePath = currentSrc.split('?')[0]; 
+            // Si la URL estaba vacía o es la primera carga, usaremos la default (dirección)
+            if (basePath.endsWith('/')) basePath = "{{ url_for('main.generar_pdf') }}";
+
+            iframe.src = basePath + query + timeParam;
         }
 
-        // Actualizar botones de descarga
         const btnAddr = document.getElementById('btn-download-addr');
         if(btnAddr) btnAddr.href = "{{ url_for('main.generar_pdf') }}" + query;
 
@@ -228,12 +244,9 @@
         if (editarForm) {
             editarForm.addEventListener('submit', function(e) {
                 e.preventDefault();
-
-                // Show loading indicator
                 loading.style.display = 'flex';
                 document.getElementById('save-btn').disabled = true;
 
-                // Collect form data
                 const rows = Array.from(document.querySelectorAll('tbody tr'));
                 const data = rows.map(row => {
                     const inputs = row.querySelectorAll('input');
@@ -251,7 +264,6 @@
                     };
                 });
 
-                // Send data to server
                 fetch('/editar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -263,7 +275,7 @@
                     document.getElementById('save-btn').disabled = false;
 
                     if (data.ok) {
-                        updateLinks(); // Refresh PDF preview with current offsets
+                        updateLinks();
                         statusMessage.textContent = 'Datos guardados correctamente';
                         statusMessage.className = 'alert success';
                         statusMessage.style.display = 'block';
